@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, schema, sources, voice
+from app.api import health, query, schema, sources, voice
 from app.profiler import retriever
 from app.profiler.store import get_store
 from app.stt import whisper
@@ -40,3 +40,4 @@ app.include_router(health.router, prefix="/api")
 app.include_router(sources.router, prefix="/api")
 app.include_router(schema.router, prefix="/api")
 app.include_router(voice.router, prefix="/api")
+app.include_router(query.router, prefix="/api")
