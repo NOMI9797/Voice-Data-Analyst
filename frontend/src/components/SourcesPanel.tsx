@@ -15,14 +15,22 @@ const ENGINE_COLOR: Record<Source["engine"], string> = {
   duckdb: "bg-amber-100 text-amber-800",
 };
 
+function ProfileBadge({ status }: { status?: string }) {
+  if (!status || status === "ready") return <span className="text-emerald-700">· profiled</span>;
+  if (status.startsWith("error")) return <span className="text-rose-700" title={status}>· profile failed</span>;
+  return <span className="animate-pulse text-sky-700">· {status}…</span>;
+}
+
 function SourceCard({
   source,
   onToggle,
   onRemove,
+  onReprofile,
 }: {
   source: Source;
   onToggle: () => void;
   onRemove: () => void;
+  onReprofile: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const tables = source.tables ?? [];
@@ -42,6 +50,7 @@ function SourceCard({
             <button onClick={() => setOpen(!open)} className="text-slate-500 hover:text-slate-800">
               {tables.length} tables {open ? "▴" : "▾"}
             </button>
+            <ProfileBadge status={source.profile_status} />
           </div>
           {source.error && <p className="mt-1 text-xs text-rose-700">{source.error}</p>}
         </div>
@@ -60,9 +69,14 @@ function SourceCard({
               <li key={t} className="truncate">• {t}</li>
             ))}
           </ul>
-          <button onClick={onRemove} className="mt-2 text-xs text-rose-600 hover:underline">
-            Remove source
-          </button>
+          <div className="mt-2 flex gap-3">
+            <button onClick={onReprofile} className="text-xs text-sky-700 hover:underline">
+              Re-profile
+            </button>
+            <button onClick={onRemove} className="text-xs text-rose-600 hover:underline">
+              Remove source
+            </button>
+          </div>
         </div>
       )}
     </li>
@@ -92,6 +106,13 @@ export default function SourcesPanel() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  const profiling = sources.some((s) => s.profile_status && !["ready", "missing"].includes(s.profile_status) && !s.profile_status.startsWith("error"));
+  useEffect(() => {
+    if (!profiling) return;
+    const t = setInterval(refresh, 2000);
+    return () => clearInterval(t);
+  }, [profiling, refresh]);
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -141,6 +162,7 @@ export default function SourcesPanel() {
               key={s.id}
               source={s}
               onToggle={() => run(() => api.setActive(s.id, !s.active))}
+              onReprofile={() => run(() => api.reprofile(s.id))}
               onRemove={() => {
                 if (confirm(`Remove "${s.name}"?`)) run(() => api.removeSource(s.id));
               }}

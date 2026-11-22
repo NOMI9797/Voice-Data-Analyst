@@ -16,6 +16,7 @@ export type Source = {
   display_url: string;
   created_at: string;
   status?: "ok" | "error";
+  profile_status?: string;
   tables?: string[];
   error?: string | null;
 };
@@ -35,7 +36,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
+export type Retrieval = {
+  question: string;
+  source_id: string | null;
+  source_name: string | null;
+  dialect: string | null;
+  tables: { table: string; score: number; bridge: boolean; value_hits: string[] }[];
+  source_scores: { source_id: string; name: string; score: number }[];
+  ambiguous_source: boolean;
+  value_hits: { table: string; match: string }[];
+  schema_text: string;
+  ms: number;
+};
+
 export const api = {
+  retrieve: (question: string) =>
+    request<Retrieval>("/schema/retrieve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    }),
+  reprofile: (id: string) => request<{ status: string }>(`/sources/${id}/profile`, { method: "POST" }),
   health: () => request<Health>("/health"),
   listSources: () => request<Source[]>("/sources"),
   addConnection: (name: string, url: string) =>

@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
+from app.profiler.store import get_store
 from app.sources.registry import SourceError, get_registry
 
 router = APIRouter(prefix="/sources", tags=["sources"])
@@ -27,6 +28,7 @@ class SourcePatch(BaseModel):
 
 def _with_tables(s) -> dict:
     out = s.public()
+    out["profile_status"] = get_store().status(s.id)
     try:
         tables = get_registry().tables(s.id)
         out.update(status="ok", tables=tables, error=None)
@@ -46,6 +48,7 @@ async def add_connection(body: ConnectionIn) -> dict:
         s = await run_in_threadpool(get_registry().add_connection, body.name, body.url)
     except SourceError as exc:
         raise HTTPException(400, str(exc)) from exc
+    get_store().schedule(s.id)
     return await run_in_threadpool(_with_tables, s)
 
 
@@ -81,6 +84,7 @@ async def upload(files: list[UploadFile] = File(...), name: str = Form("")) -> d
                 s = await run_in_threadpool(reg.add_csv_upload, name, saved)
         except SourceError as exc:
             raise HTTPException(400, str(exc)) from exc
+        get_store().schedule(s.id)
         return await run_in_threadpool(_with_tables, s)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -106,3 +110,4 @@ def delete_source(source_id: str) -> None:
         get_registry().remove(source_id)
     except SourceError as exc:
         raise HTTPException(404, str(exc)) from exc
+    get_store().remove(source_id)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Health } from "./api/client";
+import SchemaProbe from "./components/SchemaProbe";
 import SourcesPanel from "./components/SourcesPanel";
 
 function StatusDot({ ok, label }: { ok: boolean; label: string }) {
@@ -37,13 +38,16 @@ export default function App() {
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 md:grid-cols-[300px_1fr]">
         <SourcesPanel />
 
-        <section className="flex min-h-[60vh] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
+        <div className="flex flex-col gap-6">
+        <section className="flex min-h-[40vh] flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
           <div className="text-5xl">🎙️</div>
           <h2 className="mt-4 text-lg font-semibold">Ask a question</h2>
           <p className="mt-1 max-w-md text-sm text-slate-500">
             Voice questions, charts, tables and spoken answers will appear here (coming in the next steps).
           </p>
         </section>
+        <SchemaProbe />
+        </div>
       </main>
     </div>
   );
