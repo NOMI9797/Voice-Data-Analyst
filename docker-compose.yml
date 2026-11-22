@@ -42,6 +42,9 @@ services:
       DEMO_MYSQL_URL: mysql+pymysql://reader:${MYSQL_READONLY_PASSWORD:-reader_pw}@mysql:3306/${MYSQL_DATABASE:-chinook}
       DEMO_SQLITE_URL: "sqlite:///file:/data/northwind.db?mode=ro&uri=true"
       DATA_DIR: /data
+      IN_DOCKER: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # lets users connect to DBs on their laptop
     volumes:
       - ./data:/data
       - models:/models

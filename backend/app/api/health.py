@@ -1,34 +1,30 @@
 from fastapi import APIRouter
-from sqlalchemy import create_engine, text
+from fastapi.concurrency import run_in_threadpool
 
 from app.config import get_settings
+from app.sources.registry import SourceError, check_connection, get_registry
 
 router = APIRouter(tags=["health"])
 
 
-def _ping(url: str) -> str:
-    if not url:
-        return "not configured"
-    try:
-        engine = create_engine(url, pool_pre_ping=True)
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        engine.dispose()
-        return "ok"
-    except Exception as exc:  # report, don't crash the health check
-        return f"error: {type(exc).__name__}"
-
-
-@router.get("/health")
-def health() -> dict:
+def _status() -> dict:
     s = get_settings()
+    reg = get_registry()
+    dbs = {}
+    for src in reg.list():
+        try:
+            check_connection(reg.engine(src.id))
+            dbs[src.name] = "ok"
+        except SourceError:
+            dbs[src.name] = "error"
     return {
         "status": "ok",
         "llm_provider": s.llm_provider,
         "llm_key_set": bool(s.openai_api_key if s.llm_provider == "openai" else s.anthropic_api_key),
-        "databases": {
-            "postgres": _ping(s.demo_postgres_url),
-            "mysql": _ping(s.demo_mysql_url),
-            "sqlite": _ping(s.demo_sqlite_url),
-        },
+        "databases": dbs,
     }
+
+
+@router.get("/health")
+async def health() -> dict:
+    return await run_in_threadpool(_status)

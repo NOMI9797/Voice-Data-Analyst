@@ -3,7 +3,7 @@
 Talk to your databases. Ask a business question out loud, and get back a chart, a table, the SQL that was run, and a short spoken explanation. Speech recognition and text-to-speech run locally.
 
 ## Status
-Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded).
+Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded), Step 3 (data source manager).
 
 ## Requirements
 - Docker (Docker Desktop, or Colima: `colima start --cpu 4 --memory 5`)
@@ -38,4 +38,17 @@ docker/    DB init scripts (read-only users)
 scripts/   data download / seeding
 eval/      evaluation datasets, attack questions, results
 docs/      report and diagrams
+```
+
+## Adding your own data
+In the **Data sources** panel (left side of the UI) you can:
+- **Connect** with a connection string: `postgresql://user:pass@host:5432/db`, `mysql://user:pass@host:3306/db`, or `sqlite:////data/file.db`. `localhost` is mapped to your laptop automatically.
+- **Upload** one or more CSV files (each becomes a table) or a SQLite `.db` file.
+- **Toggle** a source on or off, or remove it.
+
+All connections are read-only at the database level (read-only session or read-only file mode).
+
+## Tests
+```bash
+docker compose exec backend python -m pytest -q tests
 ```

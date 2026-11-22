@@ -5,8 +5,56 @@ export type Health = {
   databases: Record<string, string>;
 };
 
-export async function getHealth(): Promise<Health> {
-  const res = await fetch("/api/health");
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+export type Source = {
+  id: string;
+  name: string;
+  engine: "postgresql" | "mysql" | "sqlite" | "duckdb";
+  dialect: string;
+  origin: "builtin" | "connection" | "upload";
+  active: boolean;
+  location: string;
+  display_url: string;
+  created_at: string;
+  status?: "ok" | "error";
+  tables?: string[];
+  error?: string | null;
+};
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`/api${path}`, init);
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body.detail) msg = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(msg);
+  }
+  return res.status === 204 ? (undefined as T) : res.json();
 }
+
+export const api = {
+  health: () => request<Health>("/health"),
+  listSources: () => request<Source[]>("/sources"),
+  addConnection: (name: string, url: string) =>
+    request<Source>("/sources", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, url }),
+    }),
+  uploadFiles: (files: File[], name = "") => {
+    const form = new FormData();
+    files.forEach((f) => form.append("files", f));
+    form.append("name", name);
+    return request<Source>("/sources/upload", { method: "POST", body: form });
+  },
+  setActive: (id: string, active: boolean) =>
+    request<Source>(`/sources/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active }),
+    }),
+  removeSource: (id: string) => request<void>(`/sources/${id}`, { method: "DELETE" }),
+};
