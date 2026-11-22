@@ -3,10 +3,10 @@
 Talk to your databases. Ask a business question out loud, and get back a chart, a table, the SQL that was run, and a short spoken explanation. Speech recognition and text-to-speech run locally.
 
 ## Status
-Work in progress. Done so far: Step 0 (repo skeleton) and Step 1 (Docker skeleton).
+Work in progress. Done so far: Step 0 (repo skeleton) and Step 1 (Docker skeleton: React, FastAPI, PostgreSQL, MySQL).
 
 ## Requirements
-- Docker Desktop (with at least 6 GB RAM in Settings → Resources)
+- Docker (Docker Desktop, or Colima: `colima start --cpu 4 --memory 5`)
 - An LLM API key (Anthropic by default)
 
 ## Quick start

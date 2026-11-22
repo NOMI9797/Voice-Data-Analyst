@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-olist}
+      POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:-reader_pw}
+    ports: ["5433:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 20
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_pw}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-shop}
+      MYSQL_READONLY_PASSWORD: ${MYSQL_READONLY_PASSWORD:-reader_pw}
+    ports: ["3307:3306"]
+    volumes:
+      - mysqldata:/var/lib/mysql
+      - ./docker/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      retries: 30
+
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DEMO_POSTGRES_URL: postgresql+psycopg://reader:${POSTGRES_READONLY_PASSWORD:-reader_pw}@postgres:5432/${POSTGRES_DB:-olist}
+      DEMO_MYSQL_URL: mysql+pymysql://reader:${MYSQL_READONLY_PASSWORD:-reader_pw}@mysql:3306/${MYSQL_DATABASE:-shop}
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+      - models:/models
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      mysql: { condition: service_healthy }
+
+  frontend:
+    build: ./frontend
+    ports: ["3000:80"]
+    depends_on: [backend]
+
+volumes:
+  pgdata:
+  mysqldata:
+  models:
