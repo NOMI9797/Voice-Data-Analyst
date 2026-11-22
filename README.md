@@ -3,25 +3,32 @@
 Talk to your databases. Ask a business question out loud, and get back a chart, a table, the SQL that was run, and a short spoken explanation. Speech recognition and text-to-speech run locally.
 
 ## Status
-Work in progress. Done so far: Step 0 (repo skeleton) and Step 1 (Docker skeleton: React, FastAPI, PostgreSQL, MySQL).
+Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded).
 
 ## Requirements
 - Docker (Docker Desktop, or Colima: `colima start --cpu 4 --memory 5`)
-- An LLM API key (Anthropic by default)
+- An OpenAI API key (set `OPENAI_API_KEY` in `.env`)
 
 ## Quick start
 ```bash
 cp .env.example .env        # then put your API key in .env
-docker compose up --build
+docker compose up --build -d
+./scripts/seed_all.sh       # loads the demo databases (one time)
 ```
+Before seeding, download the Olist dataset from
+https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce and unzip the CSVs into `data/olist/`.
+Chinook and Northwind are downloaded automatically.
 Open http://localhost:3000. The backend API docs are at http://localhost:8000/docs.
 
 | Service  | Host port | Purpose                     |
 |----------|-----------|-----------------------------|
 | frontend | 3000      | React UI (served by nginx)  |
 | backend  | 8000      | FastAPI                     |
-| postgres | 5433      | Demo DB #1 (Olist)          |
-| mysql    | 3307      | Demo DB #2                  |
+| postgres | 5433      | Demo source 1: Olist e-commerce (9 tables, about 1.6M rows) |
+| mysql    | 3307      | Demo source 2: Chinook music store (11 tables)    |
+| (file)   | -         | Demo source 3: Northwind SQLite, `data/northwind.db` |
+
+The app connects to every source with a **read-only** user or read-only mode.
 
 ## Project layout
 ```

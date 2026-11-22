@@ -7,9 +7,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # LLM
-    llm_provider: str = "anthropic"
+    llm_provider: str = "openai"
+    openai_api_key: str = ""
     anthropic_api_key: str = ""
-    llm_model: str = "claude-sonnet-5-5"
+    llm_model: str = "gpt-4.1-mini"
 
     # Local speech
     whisper_model: str = "base.en"
@@ -18,6 +19,7 @@ class Settings(BaseSettings):
     # Demo databases (read-only users), filled in by docker compose
     demo_postgres_url: str = ""
     demo_mysql_url: str = ""
+    demo_sqlite_url: str = ""
 
     # Safety
     query_row_limit: int = 1000
