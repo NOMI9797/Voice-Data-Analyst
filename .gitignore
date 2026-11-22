@@ -1,0 +1,36 @@
+# Secrets
+.env
+*.pem
+
+# Data & models (large, downloaded locally)
+data/*
+!data/.gitkeep
+models/
+*.onnx
+*.bin
+*.db
+*.sqlite
+*.duckdb
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Eval outputs
+eval/results/*
+!eval/results/.gitkeep
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
