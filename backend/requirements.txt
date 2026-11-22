@@ -13,3 +13,5 @@ httpx==0.28.1
 openai==1.59.7
 fastembed==0.5.1
 rank-bm25==0.2.2
+faster-whisper==1.1.1
+piper-tts==1.3.0

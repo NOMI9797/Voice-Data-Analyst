@@ -1,0 +1,217 @@
+import { useState } from "react";
+import { api, type Retrieval } from "../api/client";
+import { useRecorder, type Recording } from "../hooks/useRecorder";
+import { useSpeaker } from "../hooks/useSpeaker";
+
+type Timings = Record<string, number>;
+
+function MicButton({
+  state,
+  level,
+  speaking,
+  onClick,
+}: {
+  state: "idle" | "listening" | "processing";
+  level: number;
+  speaking: boolean;
+  onClick: () => void;
+}) {
+  const ring = state === "listening" ? 8 + level * 40 : 0;
+  return (
+    <button
+      onClick={onClick}
+      aria-label={state === "listening" ? "Stop recording" : "Start recording"}
+      className={`relative flex h-20 w-20 items-center justify-center rounded-full text-white shadow-lg transition ${
+        state === "listening" ? "bg-rose-600" : state === "processing" ? "bg-slate-400" : "bg-slate-900 hover:bg-slate-700"
+      }`}
+      style={{ boxShadow: state === "listening" ? `0 0 0 ${ring}px rgba(225,29,72,${speaking ? 0.25 : 0.12})` : undefined }}
+      disabled={state === "processing"}
+    >
+      {state === "processing" ? (
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+      ) : state === "listening" ? (
+        <span className="h-6 w-6 rounded-sm bg-white" />
+      ) : (
+        <svg viewBox="0 0 24 24" className="h-8 w-8" fill="currentColor">
+          <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+export default function AskPanel() {
+  const [question, setQuestion] = useState("");
+  const [heard, setHeard] = useState<string | null>(null);
+  const [retrieval, setRetrieval] = useState<Retrieval | null>(null);
+  const [timings, setTimings] = useState<Timings>({});
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [showSchema, setShowSchema] = useState(false);
+  const speaker = useSpeaker();
+
+  async function handle(text: string, t: Timings, speechEndAt: number | null) {
+    setBusy(true);
+    setError(null);
+    try {
+      const t0 = performance.now();
+      const r = await api.retrieve(text);
+      t["schema retrieval"] = Math.round(performance.now() - t0);
+      setRetrieval(r);
+      const answer = r.source_name
+        ? `I heard: ${text}. That looks like a question for the ${r.source_name} database, using ${r.tables
+            .filter((x) => !x.bridge)
+            .slice(0, 3)
+            .map((x) => x.table.replace(/_/g, " "))
+            .join(", ")}. Answering will work once the language model key is set.`
+        : `I heard: ${text}. But no data source is active.`;
+      const tSpeak = performance.now();
+      speaker.speak(answer, (firstAudio) => {
+        setTimings((prev) => ({
+          ...prev,
+          "TTS first audio": Math.round(firstAudio - tSpeak),
+          ...(speechEndAt ? { "end of question → first audio": Math.round(firstAudio - speechEndAt) } : {}),
+        }));
+      });
+      setTimings({ ...t });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const recorder = useRecorder({
+    onRecording: async (rec: Recording) => {
+      if (!rec.hadSpeech) {
+        recorder.done();
+        setError("I didn't hear anything. Try again, a bit louder or closer to the mic.");
+        return;
+      }
+      try {
+        const t0 = performance.now();
+        const tr = await api.stt(rec.wav);
+        const t: Timings = {
+          "silence wait (VAD)": Math.round(rec.stoppedAt - rec.speechEndAt),
+          "speech-to-text": Math.round(performance.now() - t0),
+          "whisper inference": Math.round(tr.ms),
+        };
+        recorder.done();
+        if (!tr.text || tr.no_speech) {
+          setError("I couldn't make out any words. Please try again.");
+          return;
+        }
+        setHeard(tr.text);
+        setQuestion(tr.text);
+        await handle(tr.text, t, rec.speechEndAt);
+      } catch (e) {
+        recorder.done();
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+  });
+
+  function micClick() {
+    speaker.stop(); // barge-in: talking interrupts the spoken answer
+    if (recorder.state === "listening") recorder.stop();
+    else {
+      setError(null);
+      recorder.start();
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <MicButton state={recorder.state} level={recorder.level} speaking={recorder.speaking} onClick={micClick} />
+        <p className="text-sm text-slate-500">
+          {recorder.state === "listening"
+            ? recorder.speaking
+              ? "Listening…"
+              : "Go ahead, I'm listening (stops automatically when you pause)"
+            : recorder.state === "processing"
+              ? "Transcribing locally…"
+              : speaker.speaking
+                ? "Speaking… (click the mic to interrupt)"
+                : "Click the mic and ask a question about your data"}
+        </p>
+        {recorder.error && <p className="text-sm text-rose-700">{recorder.error}</p>}
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (question.trim()) {
+            setHeard(null);
+            handle(question.trim(), {}, null);
+          }
+        }}
+        className="mt-5 flex gap-2"
+      >
+        <input
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="…or type a question, e.g. which product categories have the worst reviews?"
+          className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
+        />
+        <button disabled={busy || !question.trim()} className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-40">
+          Ask
+        </button>
+      </form>
+
+      {error && <p className="mt-3 rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
+
+      {heard && (
+        <p className="mt-4 text-sm">
+          <span className="text-slate-500">Heard: </span>
+          <span className="font-medium">“{heard}”</span>
+        </p>
+      )}
+
+      {retrieval && (
+        <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-500">Source:</span>
+            <span className="font-medium">{retrieval.source_name ?? "none"}</span>
+            {retrieval.ambiguous_source && (
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">ambiguous source</span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {retrieval.tables.map((t) => (
+              <span
+                key={t.table}
+                title={`score ${t.score}${t.value_hits.length ? " · " + t.value_hits.join(", ") : ""}`}
+                className={`rounded px-2 py-0.5 font-mono text-xs ${t.bridge ? "bg-slate-100 text-slate-600" : "bg-sky-100 text-sky-900"}`}
+              >
+                {t.table}
+                {t.value_hits.length > 0 && " ★"}
+              </span>
+            ))}
+          </div>
+          <button onClick={() => setShowSchema(!showSchema)} className="text-xs text-sky-700 hover:underline">
+            {showSchema ? "Hide" : "Show"} schema sent to the SQL generator
+          </button>
+          {showSchema && (
+            <pre className="max-h-96 overflow-auto rounded-md bg-slate-900 p-3 text-[11px] leading-snug text-slate-100">
+              {retrieval.schema_text}
+            </pre>
+          )}
+        </div>
+      )}
+
+      {Object.keys(timings).length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <p className="mb-1 text-xs font-medium text-slate-500">Latency (ms)</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+            {Object.entries(timings).map(([k, v]) => (
+              <span key={k}>
+                {k}: <b className="font-mono">{v}</b>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}

@@ -20,7 +20,7 @@ def _status() -> dict:
     return {
         "status": "ok",
         "llm_provider": s.llm_provider,
-        "llm_key_set": bool(s.openai_api_key if s.llm_provider == "openai" else s.anthropic_api_key),
+        "llm_key_set": bool(s.llm_key),
         "databases": dbs,
     }
 

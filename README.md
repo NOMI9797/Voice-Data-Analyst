@@ -3,11 +3,11 @@
 Talk to your databases. Ask a business question out loud, and get back a chart, a table, the SQL that was run, and a short spoken explanation. Speech recognition and text-to-speech run locally.
 
 ## Status
-Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded), Step 3 (data source manager), Step 4 (schema profiler + retrieval).
+Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded), Step 3 (data source manager), Step 4 (schema profiler + retrieval), Step 6 (local voice in/out).
 
 ## Requirements
 - Docker (Docker Desktop, or Colima: `colima start --cpu 4 --memory 5`)
-- An OpenAI API key (set `OPENAI_API_KEY` in `.env`)
+- A free Gemini API key from https://aistudio.google.com/apikey (set `GEMINI_API_KEY` in `.env`)
 
 ## Quick start
 ```bash
@@ -52,3 +52,10 @@ All connections are read-only at the database level (read-only session or read-o
 ```bash
 docker compose exec backend python -m pytest -q tests
 ```
+
+## Local speech models
+Downloaded automatically on first start into a Docker volume (`models`), then used offline:
+- Speech-to-text: faster-whisper `base.en` (int8, CPU). Set `WHISPER_MODEL=small.en` in `.env` for better accuracy (slower).
+- Text-to-speech: Piper `en_US-lessac-medium`.
+
+The browser records the microphone, detects when you stop speaking, and sends a 16 kHz WAV to the backend. Audio never leaves your machine.

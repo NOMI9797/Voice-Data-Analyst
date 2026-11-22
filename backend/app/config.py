@@ -7,10 +7,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # LLM
-    llm_provider: str = "openai"
+    llm_provider: str = "gemini"  # gemini | openai
+    gemini_api_key: str = ""
     openai_api_key: str = ""
-    anthropic_api_key: str = ""
-    llm_model: str = "gpt-4.1-mini"
+    llm_model: str = "gemini-2.5-flash"
+
+    @property
+    def llm_key(self) -> str:
+        return self.gemini_api_key if self.llm_provider == "gemini" else self.openai_api_key
 
     # Local speech
     whisper_model: str = "base.en"

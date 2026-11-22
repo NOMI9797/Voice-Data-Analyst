@@ -49,7 +49,21 @@ export type Retrieval = {
   ms: number;
 };
 
+export type Transcript = {
+  text: string;
+  duration_s: number;
+  avg_logprob: number | null;
+  no_speech: boolean;
+  ms: number;
+};
+
 export const api = {
+  stt: (wav: Blob, hint = "") => {
+    const form = new FormData();
+    form.append("audio", wav, "question.wav");
+    form.append("hint", hint);
+    return request<Transcript>("/stt", { method: "POST", body: form });
+  },
   retrieve: (question: string) =>
     request<Retrieval>("/schema/retrieve", {
       method: "POST",

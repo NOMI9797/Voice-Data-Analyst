@@ -43,6 +43,7 @@ services:
       DEMO_SQLITE_URL: "sqlite:///file:/data/northwind.db?mode=ro&uri=true"
       DATA_DIR: /data
       IN_DOCKER: "1"
+      OMP_NUM_THREADS: "4"
     extra_hosts:
       - "host.docker.internal:host-gateway"   # lets users connect to DBs on their laptop
     volumes:

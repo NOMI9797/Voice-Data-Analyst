@@ -5,9 +5,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health, schema, sources
+from app.api import health, schema, sources, voice
 from app.profiler import retriever
 from app.profiler.store import get_store
+from app.stt import whisper
+from app.tts import piper_tts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -17,7 +19,10 @@ async def lifespan(_app: FastAPI):
     store = get_store()
     store.on_change(retriever.invalidate)
     store.ensure_all()  # profile any source that has no profile yet (background)
-    threading.Thread(target=retriever.warm_up, daemon=True).start()  # load embedding model
+    # load local models in the background so the first question is fast
+    for fn in (retriever.warm_up, piper_tts.warm_up):
+        threading.Thread(target=fn, daemon=True).start()
+    whisper.EXECUTOR.submit(whisper.warm_up)  # same thread that will serve requests
     yield
 
 
@@ -28,8 +33,10 @@ app.add_middleware(
     allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-TTS-ms"],
 )
 
 app.include_router(health.router, prefix="/api")
 app.include_router(sources.router, prefix="/api")
 app.include_router(schema.router, prefix="/api")
+app.include_router(voice.router, prefix="/api")

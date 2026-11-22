@@ -1,5 +1,8 @@
 """Thin LLM wrapper. Every module calls `chat()` / `chat_json()`, so switching
-provider (OpenAI <-> Anthropic) only touches this file."""
+provider only touches this file.
+
+Gemini is used through Google's OpenAI-compatible endpoint, so one SDK
+(openai) serves both providers: only the base URL and key differ."""
 
 from __future__ import annotations
 
@@ -17,33 +20,38 @@ class LLMError(RuntimeError):
     pass
 
 
+BASE_URLS = {
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "openai": None,
+}
+
+
 @lru_cache
-def _openai_client():
+def _client():
     from openai import OpenAI
 
-    key = get_settings().openai_api_key
-    if not key:
-        raise LLMError("OPENAI_API_KEY is not set in .env")
-    return OpenAI(api_key=key, timeout=60, max_retries=2)
+    s = get_settings()
+    if s.llm_provider not in BASE_URLS:
+        raise LLMError(f"Unknown LLM_PROVIDER '{s.llm_provider}' (use gemini or openai)")
+    if not s.llm_key:
+        raise LLMError(f"{s.llm_provider.upper()}_API_KEY is not set in .env")
+    return OpenAI(api_key=s.llm_key, base_url=BASE_URLS[s.llm_provider], timeout=60, max_retries=2)
 
 
 def available() -> bool:
-    s = get_settings()
-    return bool(s.openai_api_key if s.llm_provider == "openai" else s.anthropic_api_key)
+    return bool(get_settings().llm_key)
 
 
 def chat(messages: list[dict], *, json_mode: bool = False, temperature: float = 0.0,
          max_tokens: int = 2000, model: str | None = None) -> str:
     s = get_settings()
     t0 = time.perf_counter()
-    if s.llm_provider != "openai":
-        raise LLMError(f"LLM provider '{s.llm_provider}' is not implemented yet")
     kwargs = dict(model=model or s.llm_model, messages=messages, temperature=temperature,
                   max_tokens=max_tokens)
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
     try:
-        resp = _openai_client().chat.completions.create(**kwargs)
+        resp = _client().chat.completions.create(**kwargs)
     except LLMError:
         raise
     except Exception as exc:
