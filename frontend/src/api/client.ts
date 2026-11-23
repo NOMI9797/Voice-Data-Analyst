@@ -88,7 +88,32 @@ export type SqlRun =
   | { ok: false; blocked: true; code: string; reason: string }
   | { ok: false; blocked: false; sql: string; error: string };
 
+export type AskStatus = "answered" | "refused" | "cannot_answer" | "failed" | "no_source" | "not_ready";
+
+export type AskResponse = {
+  question: string;
+  status: AskStatus;
+  answer: string;
+  answer_by_llm?: boolean;
+  sql: string | null;
+  result: Extract<SqlRun, { ok: true }> | null;
+  attempts: { sql: string; stage: "guard" | "database"; error: string; code?: string }[];
+  assumption: string;
+  retrieval: Retrieval | null;
+  source_id?: string;
+  source_name?: string;
+  timings: Record<string, number>;
+};
+
+export type Turn = { question: string; sql: string; source_id: string };
+
 export const api = {
+  ask: (question: string, history: Turn[] = []) =>
+    request<AskResponse>("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, history }),
+    }),
   runSql: (source_id: string, sql: string) =>
     request<SqlRun>("/sql/run", {
       method: "POST",

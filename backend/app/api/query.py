@@ -3,7 +3,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from app.config import get_settings
-from app.profiler.store import get_store
+from app.nl2sql.pipeline import allowed_tables as profiled_tables
 from app.safety.executor import QueryError, run_query
 from app.safety.guard import check_sql
 from app.safety.intent import screen_question
@@ -19,10 +19,10 @@ class SQLIn(BaseModel):
 
 
 def allowed_tables(source_id: str) -> dict[str, list[str]]:
-    prof = get_store().get(source_id)
-    if prof is None:
+    tables = profiled_tables(source_id)
+    if tables is None:
         raise HTTPException(409, "This source has not been profiled yet. Try again in a moment.")
-    return {t.name: [c.name for c in t.columns] for t in prof.tables}
+    return tables
 
 
 @router.post("/sql/run")

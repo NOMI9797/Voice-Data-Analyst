@@ -102,7 +102,9 @@ def choose_chart(columns: list[str], rows: list[list]) -> dict:
         return spec("empty", "The query returned no rows.")
 
     if n == 1 and 1 <= len(measures) <= 4:
-        return spec("kpi", "A single row of numbers is shown as headline values.", y=measures)
+        # a "which X has the most Y" answer: show the winning label beside its numbers
+        label = next((c for c in columns if kinds[c] != "measure"), None)
+        return spec("kpi", "A single result is shown as headline values.", x=label, y=measures)
 
     if temporals and measures:
         x = temporals[0]

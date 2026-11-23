@@ -104,3 +104,8 @@ def test_two_measures_without_dimension_is_scatter():
 def test_text_only_is_table():
     c = choose_chart(["name", "email"], [["a", "a@x"], ["b", "b@x"]])
     assert c["type"] == "table" and c["alternatives"] == []
+
+
+def test_single_row_with_label_keeps_label():
+    c = choose_chart(["genre", "total_tracks"], [["Rock", 1297]])
+    assert (c["type"], c["x"], c["y"]) == ("kpi", "genre", ["total_tracks"])

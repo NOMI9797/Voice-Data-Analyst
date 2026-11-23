@@ -3,7 +3,7 @@
 Talk to your databases. Ask a business question out loud, and get back a chart, a table, the SQL that was run, and a short spoken explanation. Speech recognition and text-to-speech run locally.
 
 ## Status
-Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded), Step 3 (data source manager), Step 4 (schema profiler + retrieval), Step 6 (local voice in/out), safety layer, Step 7 (domain word correction), Step 8 (chart, table and SQL display).
+Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded), Step 3 (data source manager), Step 4 (schema profiler + retrieval), Step 5 (question to SQL to spoken answer), Step 6 (local voice in/out), safety layer, Step 7 (domain word correction), Step 8 (chart, table and SQL display).
 
 ## Requirements
 - Docker (Docker Desktop, or Colima: `colima start --cpu 4 --memory 5`)

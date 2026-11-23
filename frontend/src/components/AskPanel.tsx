@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState } from "react";
-import { api, type CorrectionResult, type Retrieval, type SqlRun } from "../api/client";
+import { api, type AskResponse, type CorrectionResult, type Retrieval, type SqlRun, type Turn } from "../api/client";
 import { useRecorder, type Recording } from "../hooks/useRecorder";
 import { useSpeaker } from "../hooks/useSpeaker";
 const ResultView = lazy(() => import("../viz/ResultView")); // charts library loads on first use
@@ -52,6 +52,8 @@ export default function AskPanel() {
   const [showSchema, setShowSchema] = useState(false);
   const [sqlResult, setSqlResult] = useState<SqlRun | null>(null);
   const [sqlRunning, setSqlRunning] = useState(false);
+  const [reply, setReply] = useState<AskResponse | null>(null);
+  const [history, setHistory] = useState<Turn[]>([]);
   const speaker = useSpeaker();
 
   async function handle(text: string, t: Timings, speechEndAt: number | null) {
@@ -64,17 +66,24 @@ export default function AskPanel() {
       setCorrection(fix);
       text = fix.corrected;
       const t0 = performance.now();
-      const r = await api.retrieve(text);
-      t["schema retrieval"] = Math.round(performance.now() - t0);
-      setRetrieval(r);
-      setSqlResult(null);
-      const answer = r.source_name
-        ? `I heard: ${text}. That looks like a question for the ${r.source_name} database, using ${r.tables
-            .filter((x) => !x.bridge)
-            .slice(0, 3)
-            .map((x) => x.table.replace(/_/g, " "))
-            .join(", ")}. Automatic answers arrive in the next step; for now you can run SQL below.`
-        : `I heard: ${text}. But no data source is active.`;
+      const res = await api.ask(text, history);
+      t["ask (server total)"] = Math.round(performance.now() - t0);
+      for (const [k, v] of Object.entries(res.timings)) if (k !== "total") t[`· ${k}`] = Math.round(v);
+      setReply(res);
+      setRetrieval(res.retrieval);
+      // a failed query still shows what was tried, with its last error, in the SQL tab
+      const last = res.attempts[res.attempts.length - 1];
+      setSqlResult(
+        res.result ??
+          (res.sql && last
+            ? last.stage === "guard"
+              ? { ok: false, blocked: true, code: last.code ?? "", reason: last.error }
+              : { ok: false, blocked: false, sql: res.sql, error: last.error }
+            : null),
+      );
+      if (res.status === "answered" && res.sql && res.source_id)
+        setHistory((h) => [...h, { question: text, sql: res.sql!, source_id: res.source_id! }].slice(-3));
+      const answer = res.answer;
       const tSpeak = performance.now();
       speaker.speak(answer, (firstAudio) => {
         setTimings((prev) => ({
@@ -122,10 +131,11 @@ export default function AskPanel() {
   });
 
   async function runSql(sql: string) {
-    if (!retrieval?.source_id) return;
+    const sourceId = reply?.source_id ?? retrieval?.source_id;
+    if (!sourceId) return;
     setSqlRunning(true);
     try {
-      setSqlResult(await api.runSql(retrieval.source_id, sql));
+      setSqlResult(await api.runSql(sourceId, sql));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -247,11 +257,38 @@ export default function AskPanel() {
         </div>
       )}
 
-      {retrieval?.source_id && (
+      {busy && !recorder.error && (
+        <p className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+          Working out the answer…
+        </p>
+      )}
+
+      {reply && !busy && (
+        <div className={`mt-4 rounded-lg p-3 text-sm ${reply.status === "answered" ? "bg-sky-50 text-slate-900" : reply.status === "refused" ? "bg-amber-50 text-amber-900" : "bg-slate-100 text-slate-800"}`}>
+          <p className="text-base leading-relaxed">{reply.answer}</p>
+          {reply.assumption && <p className="mt-1 text-xs text-slate-500">Assumed: {reply.assumption}</p>}
+          {reply.attempts.length > 0 && reply.status === "answered" && (
+            <p className="mt-1 text-xs text-slate-500">
+              The first query failed and was fixed automatically ({reply.attempts.length} {reply.attempts.length === 1 ? "retry" : "retries"}).
+            </p>
+          )}
+        </div>
+      )}
+
+      {(reply?.source_id ?? retrieval?.source_id) && (reply?.sql || reply?.result || !reply) && (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <p className="mb-2 text-xs font-medium text-slate-500">Result · {retrieval.source_name}</p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium text-slate-500">Result · {reply?.source_name ?? retrieval?.source_name}</p>
+            {history.length > 0 && (
+              <button onClick={() => setHistory([])} className="text-xs text-sky-700 hover:underline"
+                title="Follow-up questions use the last few questions as context. Start fresh to forget them.">
+                New conversation ({history.length} remembered)
+              </button>
+            )}
+          </div>
           <Suspense fallback={<p className="text-xs text-slate-400">Loading…</p>}>
-            <ResultView result={sqlResult} sql="" onRun={runSql} running={sqlRunning} />
+            <ResultView result={sqlResult} sql={reply?.sql ?? ""} onRun={runSql} running={sqlRunning} />
           </Suspense>
         </div>
       )}

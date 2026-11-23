@@ -17,7 +17,7 @@ function download(name: string, text: string) {
 }
 
 function title(spec: Extract<SqlRun, { ok: true }>["chart"]): string | null {
-  if (!spec.x || spec.y.length === 0 || spec.type === "kpi") return null;
+  if (!spec.x || spec.y.length === 0 || spec.type === "kpi") return null; // cards are self-labelled
   const y = spec.y.map(humanize).join(" and ");
   if (spec.type === "scatter") return `${humanize(spec.y[0])} vs ${humanize(spec.x).toLowerCase()}`;
   return `${y} by ${humanize(spec.x).toLowerCase()}${spec.series ? `, per ${humanize(spec.series).toLowerCase()}` : ""}`;

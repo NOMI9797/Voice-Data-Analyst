@@ -73,6 +73,14 @@ function shape(spec: ChartSpec, columns: string[], rows: Cell[][]): { data: Poin
 function Kpis({ spec, columns, rows }: { spec: ChartSpec; columns: string[]; rows: Cell[][] }) {
   return (
     <div className="flex flex-wrap gap-3">
+      {spec.x && (
+        <div className="min-w-40 flex-1 rounded-lg border border-slate-200 px-4 py-3">
+          <p className="text-xs text-slate-500">{humanize(spec.x)}</p>
+          <p className="mt-1 truncate text-3xl font-semibold text-slate-900" title={formatValue(rows[0][columns.indexOf(spec.x)])}>
+            {formatValue(rows[0][columns.indexOf(spec.x)])}
+          </p>
+        </div>
+      )}
       {spec.y.map((y) => {
         const v = rows[0][columns.indexOf(y)];
         return (

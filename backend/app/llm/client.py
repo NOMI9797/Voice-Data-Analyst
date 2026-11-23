@@ -36,7 +36,7 @@ def _client():
     if not s.llm_key:
         raise LLMError(f"{s.llm_provider.upper()}_API_KEY is not set in .env")
     return OpenAI(api_key=s.llm_key, base_url=BASE_URLS[s.llm_provider],
-                  timeout=s.llm_timeout_seconds, max_retries=1)
+                  timeout=s.llm_timeout_seconds, max_retries=0)  # retries = the model chain
 
 
 def available() -> bool:
@@ -64,10 +64,15 @@ def _is_transient(exc: Exception) -> bool:
 
 
 def chat(messages: list[dict], *, json_mode: bool = False, temperature: float = 0.0,
-         max_tokens: int = 2000, model: str | None = None) -> str:
-    client = _client()
+         max_tokens: int = 2000, model: str | None = None, timeout: float | None = None,
+         fallback: bool = True) -> str:
+    """timeout: per-call deadline in seconds (default from settings).
+    fallback=False tries only the first model: for calls where a quick
+    non-LLM answer beats waiting for another model."""
+    client = _client() if timeout is None else _client().with_options(timeout=timeout)
     last_exc: Exception | None = None
-    for name in _model_chain(model):
+    chain = _model_chain(model)
+    for name in (chain if fallback else chain[:1]):
         t0 = time.perf_counter()
         kwargs = dict(model=name, messages=messages, temperature=temperature,
                       max_tokens=max_tokens)

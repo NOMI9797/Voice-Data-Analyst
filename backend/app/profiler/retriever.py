@@ -268,13 +268,24 @@ def _connect(selected: list[str], graph: dict[str, set[str]]) -> list[str]:
     return bridges
 
 
-def retrieve(question: str, source_ids: list[str] | None = None) -> Retrieval:
+# a follow-up stays on the previous question's source unless another source
+# scores clearly higher (follow-ups like "and in 2018?" carry almost no signal)
+STICKY_MARGIN = 0.08
+
+
+def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: str | None = None,
+             context: str = "") -> Retrieval:
+    """context: the previous question, mixed into the search so a follow-up
+    finds the tables it is talking about. The returned `question` is unchanged."""
     t0 = time.perf_counter()
+    asked = question
+    if context:
+        question = f"{context} {question}"
     reg = get_registry()
     ids = source_ids or [s.id for s in reg.active()]
     indexes = [i for i in (get_index(sid) for sid in ids) if i is not None]
     if not indexes:
-        return Retrieval(question, None, None, None, [], [], False, [], "", 0.0)
+        return Retrieval(asked, None, None, None, [], [], False, [], "", 0.0)
 
     qv = embed([question], query=True)[0]
     qtok = _tokens(question)
@@ -316,6 +327,9 @@ def retrieve(question: str, source_ids: list[str] | None = None) -> Retrieval:
                               "score": round(sum(top) / max(len(top), 1), 4)})
     order = sorted(range(len(indexes)), key=lambda i: source_scores[i]["score"], reverse=True)
     best = order[0]
+    pref = next((i for i in order if source_scores[i]["source_id"] == prefer_source), None)
+    if pref is not None and source_scores[best]["score"] - source_scores[pref]["score"] <= STICKY_MARGIN:
+        best = pref
     ambiguous = len(order) > 1 and source_scores[order[0]]["score"] - source_scores[order[1]]["score"] < 0.015
 
     idx = indexes[best]
@@ -342,7 +356,7 @@ def retrieve(question: str, source_ids: list[str] | None = None) -> Retrieval:
     value_hits = [{"table": h.table, "match": m} for h in chosen for m in h.value_hits]
     schema = render_schema(idx.profile, [h.table for h in chosen])
     return Retrieval(
-        question=question,
+        question=asked,
         source_id=idx.profile.source_id,
         source_name=idx.profile.source_name,
         dialect=idx.profile.dialect,
