@@ -8,6 +8,7 @@ from app.safety.executor import QueryError, run_query
 from app.safety.guard import check_sql
 from app.safety.intent import screen_question
 from app.sources.registry import SourceError, get_registry
+from app.viz.chart import choose_chart
 
 router = APIRouter(tags=["query"])
 
@@ -39,7 +40,8 @@ async def run_sql(body: SQLIn) -> dict:
         result = await run_in_threadpool(run_query, body.source_id, guard.sql)
     except QueryError as exc:
         return {"ok": False, "blocked": False, "sql": guard.sql, "error": str(exc)}
-    return {"ok": True, "sql": guard.sql, **result}
+    return {"ok": True, "sql": guard.sql, **result,
+            "chart": choose_chart(result["columns"], result["rows"])}
 
 
 class QuestionIn(BaseModel):

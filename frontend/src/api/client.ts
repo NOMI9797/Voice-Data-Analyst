@@ -66,7 +66,35 @@ export type CorrectionResult = {
   ms: number;
 };
 
+export type ChartType = "kpi" | "line" | "bar" | "scatter" | "table" | "empty";
+
+export type ChartSpec = {
+  type: ChartType;
+  x: string | null;
+  y: string[];
+  series: string | null;
+  reason: string;
+  alternatives: ChartType[];
+  column_types: Record<string, "temporal" | "measure" | "identifier" | "category">;
+  orientation?: "vertical" | "horizontal";
+  limit?: number;
+  note?: string | null;
+};
+
+export type Cell = string | number | boolean | null;
+
+export type SqlRun =
+  | { ok: true; sql: string; columns: string[]; rows: Cell[][]; row_count: number; truncated: boolean; ms: number; chart: ChartSpec }
+  | { ok: false; blocked: true; code: string; reason: string }
+  | { ok: false; blocked: false; sql: string; error: string };
+
 export const api = {
+  runSql: (source_id: string, sql: string) =>
+    request<SqlRun>("/sql/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source_id, sql }),
+    }),
   correct: (text: string) =>
     request<CorrectionResult>("/correct", {
       method: "POST",

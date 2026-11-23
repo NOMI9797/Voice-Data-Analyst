@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { api, type CorrectionResult, type Retrieval } from "../api/client";
+import { Suspense, lazy, useState } from "react";
+import { api, type CorrectionResult, type Retrieval, type SqlRun } from "../api/client";
 import { useRecorder, type Recording } from "../hooks/useRecorder";
 import { useSpeaker } from "../hooks/useSpeaker";
+const ResultView = lazy(() => import("../viz/ResultView")); // charts library loads on first use
 
 type Timings = Record<string, number>;
 
@@ -49,6 +50,8 @@ export default function AskPanel() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
+  const [sqlResult, setSqlResult] = useState<SqlRun | null>(null);
+  const [sqlRunning, setSqlRunning] = useState(false);
   const speaker = useSpeaker();
 
   async function handle(text: string, t: Timings, speechEndAt: number | null) {
@@ -64,12 +67,13 @@ export default function AskPanel() {
       const r = await api.retrieve(text);
       t["schema retrieval"] = Math.round(performance.now() - t0);
       setRetrieval(r);
+      setSqlResult(null);
       const answer = r.source_name
         ? `I heard: ${text}. That looks like a question for the ${r.source_name} database, using ${r.tables
             .filter((x) => !x.bridge)
             .slice(0, 3)
             .map((x) => x.table.replace(/_/g, " "))
-            .join(", ")}. Answering will work once the language model key is set.`
+            .join(", ")}. Automatic answers arrive in the next step; for now you can run SQL below.`
         : `I heard: ${text}. But no data source is active.`;
       const tSpeak = performance.now();
       speaker.speak(answer, (firstAudio) => {
@@ -116,6 +120,18 @@ export default function AskPanel() {
       }
     },
   });
+
+  async function runSql(sql: string) {
+    if (!retrieval?.source_id) return;
+    setSqlRunning(true);
+    try {
+      setSqlResult(await api.runSql(retrieval.source_id, sql));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSqlRunning(false);
+    }
+  }
 
   function micClick() {
     speaker.stop(); // barge-in: talking interrupts the spoken answer
@@ -228,6 +244,15 @@ export default function AskPanel() {
               {retrieval.schema_text}
             </pre>
           )}
+        </div>
+      )}
+
+      {retrieval?.source_id && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <p className="mb-2 text-xs font-medium text-slate-500">Result · {retrieval.source_name}</p>
+          <Suspense fallback={<p className="text-xs text-slate-400">Loading…</p>}>
+            <ResultView result={sqlResult} sql="" onRun={runSql} running={sqlRunning} />
+          </Suspense>
         </div>
       )}
 
