@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, type Retrieval } from "../api/client";
+import { api, type CorrectionResult, type Retrieval } from "../api/client";
 import { useRecorder, type Recording } from "../hooks/useRecorder";
 import { useSpeaker } from "../hooks/useSpeaker";
 
@@ -43,6 +43,7 @@ function MicButton({
 export default function AskPanel() {
   const [question, setQuestion] = useState("");
   const [heard, setHeard] = useState<string | null>(null);
+  const [correction, setCorrection] = useState<CorrectionResult | null>(null);
   const [retrieval, setRetrieval] = useState<Retrieval | null>(null);
   const [timings, setTimings] = useState<Timings>({});
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,11 @@ export default function AskPanel() {
     setBusy(true);
     setError(null);
     try {
+      const tc = performance.now();
+      const fix = await api.correct(text);
+      t["word correction"] = Math.round(performance.now() - tc);
+      setCorrection(fix);
+      text = fix.corrected;
       const t0 = performance.now();
       const r = await api.retrieve(text);
       t["schema retrieval"] = Math.round(performance.now() - t0);
@@ -161,11 +167,36 @@ export default function AskPanel() {
 
       {error && <p className="mt-3 rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
 
-      {heard && (
-        <p className="mt-4 text-sm">
-          <span className="text-slate-500">Heard: </span>
-          <span className="font-medium">“{heard}”</span>
-        </p>
+      {(heard || correction) && (
+        <div className="mt-4 space-y-1 text-sm">
+          {heard && (
+            <p>
+              <span className="text-slate-500">Heard: </span>
+              <span className="font-medium">“{heard}”</span>
+            </p>
+          )}
+          {correction && correction.corrections.length > 0 && (
+            <p>
+              <span className="text-slate-500">Corrected: </span>
+              {correction.corrections.map((c, i) => (
+                <span key={i} className="mr-2 inline-flex items-center gap-1" title={c.locations.map((l) => `${l.source} · ${l.table}.${l.column}`).join("\n")}>
+                  <span className="text-rose-700 line-through">{c.original}</span>→
+                  <span className="rounded bg-emerald-100 px-1 font-medium text-emerald-900">{c.corrected}</span>
+                </span>
+              ))}
+            </p>
+          )}
+          {correction && correction.entities.length > 0 && (
+            <p className="text-xs text-slate-500">
+              Recognized:{" "}
+              {correction.entities.map((e) => (
+                <span key={e.value} className="mr-1.5 rounded bg-slate-100 px-1 py-0.5 text-slate-700" title={e.locations.map((l) => `${l.source} · ${l.table}.${l.column}`).join("\n")}>
+                  {e.value}
+                </span>
+              ))}
+            </p>
+          )}
+        </div>
       )}
 
       {retrieval && (

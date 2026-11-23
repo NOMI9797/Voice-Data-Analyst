@@ -57,7 +57,22 @@ export type Transcript = {
   ms: number;
 };
 
+export type CorrectionResult = {
+  original: string;
+  corrected: string;
+  corrections: { original: string; corrected: string; score: number; locations: { source: string; table: string; column: string }[] }[];
+  entities: { text: string; value: string; locations: { source: string; table: string; column: string }[] }[];
+  ambiguous: { original: string; corrected: string; alternatives: string[] }[];
+  ms: number;
+};
+
 export const api = {
+  correct: (text: string) =>
+    request<CorrectionResult>("/correct", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }),
   stt: (wav: Blob, hint = "") => {
     const form = new FormData();
     form.append("audio", wav, "question.wav");
