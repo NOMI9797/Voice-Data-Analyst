@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     llm_provider: str = "gemini"  # gemini | openai
     gemini_api_key: str = ""
     openai_api_key: str = ""
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-3.5-flash-lite"
+    # Tried in order when the main model is overloaded, rate limited or times out
+    llm_fallback_models: str = "gemini-flash-lite-latest,gemini-3.8-flash,gemini-3.5-flash"
+    llm_timeout_seconds: float = 30
 
     @property
     def llm_key(self) -> str:

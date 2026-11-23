@@ -35,29 +35,56 @@ def _client():
         raise LLMError(f"Unknown LLM_PROVIDER '{s.llm_provider}' (use gemini or openai)")
     if not s.llm_key:
         raise LLMError(f"{s.llm_provider.upper()}_API_KEY is not set in .env")
-    return OpenAI(api_key=s.llm_key, base_url=BASE_URLS[s.llm_provider], timeout=60, max_retries=2)
+    return OpenAI(api_key=s.llm_key, base_url=BASE_URLS[s.llm_provider],
+                  timeout=s.llm_timeout_seconds, max_retries=1)
 
 
 def available() -> bool:
     return bool(get_settings().llm_key)
 
 
+def _model_chain(model: str | None) -> list[str]:
+    """Primary model first, then the configured fallbacks (no duplicates)."""
+    s = get_settings()
+    chain = [model or s.llm_model]
+    chain += [m.strip() for m in s.llm_fallback_models.split(",") if m.strip()]
+    return list(dict.fromkeys(chain))
+
+
+def _is_transient(exc: Exception) -> bool:
+    """Overload, rate limit, timeout or server error: worth trying another model.
+    Bad key / bad request are not (another model would fail the same way)."""
+    from openai import APIConnectionError, APIStatusError, APITimeoutError
+
+    if isinstance(exc, (APITimeoutError, APIConnectionError)):
+        return True
+    if isinstance(exc, APIStatusError):
+        return exc.status_code in (404, 408, 429) or exc.status_code >= 500
+    return False
+
+
 def chat(messages: list[dict], *, json_mode: bool = False, temperature: float = 0.0,
          max_tokens: int = 2000, model: str | None = None) -> str:
-    s = get_settings()
-    t0 = time.perf_counter()
-    kwargs = dict(model=model or s.llm_model, messages=messages, temperature=temperature,
-                  max_tokens=max_tokens)
-    if json_mode:
-        kwargs["response_format"] = {"type": "json_object"}
-    try:
-        resp = _client().chat.completions.create(**kwargs)
-    except LLMError:
-        raise
-    except Exception as exc:
-        raise LLMError(f"LLM call failed: {exc}") from exc
-    log.info("llm %s %.2fs", kwargs["model"], time.perf_counter() - t0)
-    return resp.choices[0].message.content or ""
+    client = _client()
+    last_exc: Exception | None = None
+    for name in _model_chain(model):
+        t0 = time.perf_counter()
+        kwargs = dict(model=name, messages=messages, temperature=temperature,
+                      max_tokens=max_tokens)
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        try:
+            resp = client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            if not _is_transient(exc):
+                raise LLMError(f"LLM call failed: {exc}") from exc
+            log.warning("llm %s unavailable after %.2fs (%s), trying next model",
+                        name, time.perf_counter() - t0, type(exc).__name__)
+            last_exc = exc
+            continue
+        log.info("llm %s %.2fs", name, time.perf_counter() - t0)
+        return resp.choices[0].message.content or ""
+    raise LLMError(f"All LLM models unavailable, last error: {last_exc}") from last_exc
 
 
 def chat_json(messages: list[dict], **kw) -> dict:
