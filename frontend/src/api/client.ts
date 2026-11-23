@@ -88,7 +88,10 @@ export type SqlRun =
   | { ok: false; blocked: true; code: string; reason: string }
   | { ok: false; blocked: false; sql: string; error: string };
 
-export type AskStatus = "answered" | "refused" | "cannot_answer" | "failed" | "no_source" | "not_ready";
+export type AskStatus = "answered" | "clarify" | "refused" | "cannot_answer" | "failed" | "no_source" | "not_ready";
+
+export type SourceChoice = { source_id: string; name: string };
+export type Pending = { question: string; options: SourceChoice[] };
 
 export type AskResponse = {
   question: string;
@@ -102,17 +105,20 @@ export type AskResponse = {
   retrieval: Retrieval | null;
   source_id?: string;
   source_name?: string;
+  choices?: SourceChoice[];
+  chosen_source?: string;
+  switched_source?: boolean;
   timings: Record<string, number>;
 };
 
 export type Turn = { question: string; sql: string; source_id: string };
 
 export const api = {
-  ask: (question: string, history: Turn[] = []) =>
+  ask: (question: string, history: Turn[] = [], opts: { source_ids?: string[]; pending?: Pending | null } = {}) =>
     request<AskResponse>("/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, history }),
+      body: JSON.stringify({ question, history, source_ids: opts.source_ids, pending: opts.pending ?? undefined }),
     }),
   runSql: (source_id: string, sql: string) =>
     request<SqlRun>("/sql/run", {

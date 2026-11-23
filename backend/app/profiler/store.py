@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.llm import client as llm
-from app.profiler.describe import describe_profile
+from app.profiler.describe import carry_over_descriptions, describe_profile
 from app.profiler.models import SourceProfile
 from app.profiler.profile import profile_source
 from app.sources.registry import SourceError, get_registry
@@ -77,8 +77,11 @@ class ProfileStore:
         except SourceError:
             return  # removed while queued
         try:
+            previous = self.get(source_id)
             self._status[source_id] = "profiling"
             prof = profile_source(source, reg.engine(source_id))
+            if previous is not None:
+                carry_over_descriptions(previous, prof)
             self._save(prof)
             self._notify(source_id)
             if llm.available():

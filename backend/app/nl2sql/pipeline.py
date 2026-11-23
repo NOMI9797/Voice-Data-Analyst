@@ -20,6 +20,7 @@ from app.llm import client as llm
 from app.nl2sql.answer import spoken_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
 from app.profiler.retriever import retrieve
+from app.profiler.routing import resolve_choice
 from app.profiler.store import get_store
 from app.safety.executor import QueryError, run_query
 from app.safety.guard import check_sql
@@ -55,7 +56,17 @@ class _Clock:
         return round((time.perf_counter() - self._t0) * 1000, 1)
 
 
-def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] | None = None) -> dict:
+def _spoken_choices(names: list[str]) -> str:
+    names = [f"{n}" for n in names]
+    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
+    return f"That could be about the {listed} data. Which one do you mean?"
+
+
+def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] | None = None,
+        pending: dict | None = None) -> dict:
+    """pending: the clarification we asked last time, {"question": ..., "options": [{source_id, name}]}.
+    If this question is an answer to it ("Olist", "the second one"), the ORIGINAL
+    question is answered on the chosen source; otherwise it is a new question."""
     s = get_settings()
     clock = _Clock()
     out: dict = {"question": question, "status": "", "answer": "", "sql": None, "result": None,
@@ -66,6 +77,13 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         out["timings"]["total"] = clock.total()
         log.info("ask %s in %.0f ms: %s", status, out["timings"]["total"], question[:80])
         return out
+
+    if pending and pending.get("options"):
+        chosen = resolve_choice(question, pending["options"])
+        if chosen:
+            out["chosen_source"] = chosen
+            question = out["question"] = pending["question"]
+            source_ids = [chosen]
 
     # 1. screen
     t = time.perf_counter()
@@ -87,6 +105,9 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     out["retrieval"] = asdict(r)
     if not r.source_id:
         return done("no_source", "No data source is active. Turn one on in the sources panel first.")
+    if r.choices:
+        out["choices"] = r.choices
+        return done("clarify", _spoken_choices([c["name"] for c in r.choices]))
     tables = allowed_tables(r.source_id)
     if tables is None:
         return done("not_ready", f"The {r.source_name} database is still being analysed. Try again in a moment.")
@@ -110,7 +131,8 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         t = time.perf_counter()
         alt = retrieve(question, source_ids)
         clock.lap("retrieval", t)
-        if alt.source_id and alt.source_id != r.source_id and (alt_tables := allowed_tables(alt.source_id)):
+        if alt.source_id and not alt.choices and alt.source_id != r.source_id \
+                and (alt_tables := allowed_tables(alt.source_id)):
             t = time.perf_counter()
             try:
                 alt_gen = generate_sql(question, alt.schema_text, alt.dialect, alt.value_hits, [])

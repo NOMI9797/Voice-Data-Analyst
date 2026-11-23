@@ -1,0 +1,48 @@
+{"q": "which brazilian states have the most customers", "expect": ["olist"], "note": "Olist is the Brazilian e-commerce set; Chinook has 13 Brazilian customers"}
+{"q": "how many orders were delivered late", "expect": ["olist"]}
+{"q": "average delivery time in days by state", "expect": ["olist"]}
+{"q": "which payment type is used most often", "expect": ["olist"]}
+{"q": "how many orders were paid with boleto", "expect": ["olist"]}
+{"q": "average review score per product category", "expect": ["olist"]}
+{"q": "how many sellers are in sao paulo", "expect": ["olist"]}
+{"q": "what is the average freight value per order", "expect": ["olist", "northwind"], "ambiguous": true, "note": "Northwind Orders.Freight too"}
+{"q": "which product categories have the worst reviews", "expect": ["olist"]}
+{"q": "how many orders were placed each month in 2017", "expect": ["olist", "northwind"], "ambiguous": true, "note": "Northwind has 2017 orders too"}
+{"q": "top 10 cities by number of customers", "expect": ["olist", "chinook", "northwind"], "ambiguous": true, "note": "all three have customer cities"}
+{"q": "how many installments do customers usually pay in", "expect": ["olist"]}
+{"q": "what share of reviews have a comment", "expect": ["olist"]}
+{"q": "which sellers have the highest revenue", "expect": ["olist"]}
+{"q": "which artist has the most albums", "expect": ["chinook"]}
+{"q": "how many tracks are in each genre", "expect": ["chinook"]}
+{"q": "longest song in the catalog", "expect": ["chinook"]}
+{"q": "which playlist has the most tracks", "expect": ["chinook"]}
+{"q": "total invoice revenue per country", "expect": ["chinook"]}
+{"q": "which media type is most common", "expect": ["chinook"]}
+{"q": "which support rep has the most customers", "expect": ["chinook"]}
+{"q": "how many tracks did led zeppelin record", "expect": ["chinook"]}
+{"q": "best selling rock albums", "expect": ["chinook"]}
+{"q": "average track length in minutes by genre", "expect": ["chinook"]}
+{"q": "how much did each customer spend on music", "expect": ["chinook"]}
+{"q": "which composers wrote the most songs", "expect": ["chinook"]}
+{"q": "which supplier provides the most products", "expect": ["northwind"]}
+{"q": "how many products are in the beverages category", "expect": ["northwind"]}
+{"q": "which shipper handled the most orders", "expect": ["northwind"]}
+{"q": "products that are discontinued", "expect": ["northwind"]}
+{"q": "average discount given on order lines", "expect": ["northwind"]}
+{"q": "which products are below their reorder level", "expect": ["northwind"]}
+{"q": "which employee covers the most territories", "expect": ["northwind"]}
+{"q": "total sales of chai and chang", "expect": ["northwind"]}
+{"q": "how many units of seafood are in stock", "expect": ["northwind"]}
+{"q": "which region has the most territories", "expect": ["northwind"]}
+{"q": "orders shipped to germany by speedy express", "expect": ["northwind"]}
+{"q": "how many customers are there", "expect": ["olist", "chinook", "northwind"], "ambiguous": true}
+{"q": "how many orders do we have", "expect": ["olist", "northwind"], "ambiguous": true}
+{"q": "total revenue by month", "expect": ["olist", "chinook", "northwind"], "ambiguous": true}
+{"q": "who are our top customers", "expect": ["olist", "chinook", "northwind"], "ambiguous": true}
+{"q": "how many employees are there", "expect": ["chinook", "northwind"], "ambiguous": true}
+{"q": "which country has the most customers", "expect": ["chinook", "northwind"], "ambiguous": true}
+{"q": "what are the best selling products", "expect": ["olist", "northwind"], "ambiguous": true}
+{"q": "average order value", "expect": ["olist", "chinook", "northwind"], "ambiguous": true}
+{"q": "sales per year", "expect": ["olist", "chinook", "northwind"], "ambiguous": true}
+{"q": "how many product categories are there", "expect": ["olist", "northwind"], "ambiguous": true}
+{"q": "which city has the most customers", "expect": ["olist", "chinook", "northwind"], "ambiguous": true}

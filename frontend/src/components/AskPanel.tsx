@@ -1,5 +1,5 @@
-import { Suspense, lazy, useState } from "react";
-import { api, type AskResponse, type CorrectionResult, type Retrieval, type SqlRun, type Turn } from "../api/client";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { api, type AskResponse, type CorrectionResult, type Pending, type Retrieval, type Source, type SqlRun, type Turn } from "../api/client";
 import { useRecorder, type Recording } from "../hooks/useRecorder";
 import { useSpeaker } from "../hooks/useSpeaker";
 const ResultView = lazy(() => import("../viz/ResultView")); // charts library loads on first use
@@ -54,19 +54,37 @@ export default function AskPanel() {
   const [sqlRunning, setSqlRunning] = useState(false);
   const [reply, setReply] = useState<AskResponse | null>(null);
   const [history, setHistory] = useState<Turn[]>([]);
+  const [pending, setPending] = useState<Pending | null>(null); // "which database?" we asked
+  const [sources, setSources] = useState<Source[]>([]);
+  const [scope, setScope] = useState<string>("auto"); // "auto" = all active sources
   const speaker = useSpeaker();
 
-  async function handle(text: string, t: Timings, speechEndAt: number | null) {
+  function loadSources() {
+    api.listSources().then(setSources).catch(() => {});
+  }
+  useEffect(loadSources, []);
+  const active = sources.filter((s) => s.active);
+  useEffect(() => {
+    if (scope !== "auto" && !active.some((s) => s.id === scope)) setScope("auto");
+  }, [sources]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handle(text: string, t: Timings, speechEndAt: number | null, pickSource?: string) {
     setBusy(true);
     setError(null);
     try {
       const tc = performance.now();
-      const fix = await api.correct(text);
-      t["word correction"] = Math.round(performance.now() - tc);
-      setCorrection(fix);
-      text = fix.corrected;
+      if (!pickSource) {
+        const fix = await api.correct(text);
+        t["word correction"] = Math.round(performance.now() - tc);
+        setCorrection(fix);
+        text = fix.corrected;
+      }
       const t0 = performance.now();
-      const res = await api.ask(text, history);
+      const res = await api.ask(text, history, {
+        source_ids: pickSource ? [pickSource] : scope !== "auto" ? [scope] : undefined,
+        pending: pickSource ? null : pending,
+      });
+      setPending(res.status === "clarify" && res.choices?.length ? { question: res.question, options: res.choices } : null);
       t["ask (server total)"] = Math.round(performance.now() - t0);
       for (const [k, v] of Object.entries(res.timings)) if (k !== "total") t[`· ${k}`] = Math.round(v);
       setReply(res);
@@ -82,7 +100,7 @@ export default function AskPanel() {
             : null),
       );
       if (res.status === "answered" && res.sql && res.source_id)
-        setHistory((h) => [...h, { question: text, sql: res.sql!, source_id: res.source_id! }].slice(-3));
+        setHistory((h) => [...h, { question: res.question, sql: res.sql!, source_id: res.source_id! }].slice(-3));
       const answer = res.answer;
       const tSpeak = performance.now();
       speaker.speak(answer, (firstAudio) => {
@@ -186,6 +204,17 @@ export default function AskPanel() {
           placeholder="…or type a question, e.g. which product categories have the worst reviews?"
           className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none"
         />
+        {active.length > 1 && (
+          <select value={scope} onChange={(e) => { setScope(e.target.value); setHistory([]); setPending(null); }}
+            onFocus={loadSources} aria-label="Which data to ask"
+            title="Auto picks the database that fits each question, and asks you when it's unclear"
+            className="max-w-44 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700">
+            <option value="auto">All active ({active.length})</option>
+            {active.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        )}
         <button disabled={busy || !question.trim()} className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-40">
           Ask
         </button>
@@ -225,7 +254,7 @@ export default function AskPanel() {
         </div>
       )}
 
-      {retrieval && (
+      {retrieval && reply?.status !== "clarify" && (
         <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-slate-500">Source:</span>
@@ -267,6 +296,17 @@ export default function AskPanel() {
       {reply && !busy && (
         <div className={`mt-4 rounded-lg p-3 text-sm ${reply.status === "answered" ? "bg-sky-50 text-slate-900" : reply.status === "refused" ? "bg-amber-50 text-amber-900" : "bg-slate-100 text-slate-800"}`}>
           <p className="text-base leading-relaxed">{reply.answer}</p>
+          {reply.status === "clarify" && pending && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {pending.options.map((o, i) => (
+                <button key={o.source_id} onClick={() => { speaker.stop(); handle(pending.question, {}, null, o.source_id); }}
+                  className="rounded-full border border-sky-300 bg-white px-3 py-1 text-sm text-sky-900 hover:bg-sky-100">
+                  {i + 1}. {o.name}
+                </button>
+              ))}
+              <span className="text-xs text-slate-500">…or just say the name</span>
+            </div>
+          )}
           {reply.assumption && <p className="mt-1 text-xs text-slate-500">Assumed: {reply.assumption}</p>}
           {reply.attempts.length > 0 && reply.status === "answered" && (
             <p className="mt-1 text-xs text-slate-500">

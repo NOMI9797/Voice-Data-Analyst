@@ -14,10 +14,21 @@ class TurnIn(BaseModel):
     source_id: str = ""
 
 
+class OptionIn(BaseModel):
+    source_id: str
+    name: str
+
+
+class PendingIn(BaseModel):
+    question: str
+    options: list[OptionIn] = Field(max_length=5)
+
+
 class AskIn(BaseModel):
     question: str = Field(max_length=1000)
     history: list[TurnIn] = Field(default_factory=list, max_length=10)
     source_ids: list[str] | None = None
+    pending: PendingIn | None = None  # the "which database?" question we asked last time
 
 
 @router.post("/ask")
@@ -26,4 +37,5 @@ async def ask_question(body: AskIn) -> dict:
     if not body.question.strip():
         raise HTTPException(400, "Empty question")
     history = [Turn(t.question, t.sql, t.source_id) for t in body.history]
-    return await run_in_threadpool(ask, body.question.strip(), history, body.source_ids)
+    pending = body.pending.model_dump() if body.pending else None
+    return await run_in_threadpool(ask, body.question.strip(), history, body.source_ids, pending)

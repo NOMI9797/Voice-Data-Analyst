@@ -10,7 +10,7 @@ from app.nl2sql.generator import Generation, _parse
 from app.safety.executor import QueryError
 
 RETRIEVAL = dict(source_id="src1", source_name="Shop", dialect="postgres", schema_text="TABLE orders ...",
-                 value_hits=[], tables=[], source_scores=[], ambiguous_source=False, ms=1.0)
+                 value_hits=[], tables=[], source_scores=[], ambiguous_source=False, ms=1.0, choices=[])
 TABLES = {"orders": ["order_id", "status", "purchased_at"], "customers": ["customer_id", "email", "state"]}
 
 
@@ -117,7 +117,7 @@ def test_llm_down_gives_spoken_failure(env, monkeypatch):
 
 
 def test_no_active_source(env, monkeypatch):
-    monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(source_id=None))
+    monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(source_id=None, choices=[]))
     assert pipeline.ask("how many orders")["status"] == "no_source"
 
 
@@ -172,3 +172,38 @@ def test_no_switch_when_best_source_is_the_same(env):
     env["gen"].append(Generation(sql=None, message="no weather data"))
     out = pipeline.ask("will it rain?", [Turn("orders per month", "select ...", "src1")])
     assert out["status"] == "cannot_answer" and env["gen"] == []
+
+
+OPTIONS = [{"source_id": "olist", "name": "Olist e-commerce"}, {"source_id": "chinook", "name": "Chinook music store"}]
+
+
+def test_close_call_asks_without_llm(env, monkeypatch):
+    monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(
+        **{**RETRIEVAL, "choices": OPTIONS}, question=q))
+    out = pipeline.ask("how many customers are there")
+    assert out["status"] == "clarify" and out["choices"] == OPTIONS
+    assert out["answer"] == "That could be about the Olist e-commerce or Chinook music store data. Which one do you mean?"
+    assert env["gen"] == [] and not env["ran"]  # no LLM call, no query
+
+
+def test_reply_to_clarification_answers_original_question(env, monkeypatch):
+    seen = {}
+
+    def fake_retrieve(q, ids=None, **kw):
+        seen["q"], seen["ids"] = q, ids
+        return SimpleNamespace(**{**RETRIEVAL, "source_id": ids[0]}, question=q)
+
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
+    env["gen"].append(Generation(sql="select count(*) as customers from customers"))
+    env["db"].append(ok_result())
+    out = pipeline.ask("the music store", pending={"question": "how many customers are there", "options": OPTIONS})
+    assert out["status"] == "answered" and out["chosen_source"] == "chinook"
+    assert seen == {"q": "how many customers are there", "ids": ["chinook"]}
+    assert out["question"] == "how many customers are there"
+
+
+def test_unrelated_reply_is_a_new_question(env):
+    env["gen"].append(Generation(sql="select count(*) as orders from orders"))
+    env["db"].append(ok_result())
+    out = pipeline.ask("how many orders were late", pending={"question": "how many customers", "options": OPTIONS})
+    assert out["status"] == "answered" and "chosen_source" not in out and out["question"] == "how many orders were late"

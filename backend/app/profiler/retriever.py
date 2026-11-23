@@ -27,6 +27,7 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 
 from app.profiler.models import SourceProfile, TableProfile
+from app.profiler.routing import decide
 from app.profiler.profile import _split_words
 from app.profiler.store import get_store
 from app.sources.registry import get_registry
@@ -41,6 +42,56 @@ MAX_WITH_BRIDGES = 8
 _STOP = set("""a an the of in on for to by with and or is are was were be what which who whom how many much
 show me give list tell top most least per each all any from at as it this that these those do does did
 i we you our my their there please can could would should get find""".split())
+
+
+# words that say HOW to aggregate, not WHAT data: every source "covers" them equally
+_ANALYTIC = set("""average avg mean total sum count number amount best worst highest lowest largest smallest
+biggest longest shortest common often usually share percent percentage rate ratio trend compare compared
+there have has had our us value time times duration period month months monthly year years yearly
+day days daily week weeks weekly quarter quarters hour hours minute minutes""".split())
+
+
+_vocab_cache: dict[int, set[str]] = {}
+
+
+def _vocabulary(idx: "SourceIndex") -> set[str]:
+    """Every word in the source's table/column names, descriptions and listed values."""
+    key = id(idx)
+    if key not in _vocab_cache:
+        words = set()
+        for doc in idx.table_docs:
+            words.update(_tokens(doc))
+        words.update(_tokens(idx.profile.description or ""))
+        _vocab_cache[key] = words
+    return _vocab_cache[key]
+
+
+def _same_stem(a: str, b: str) -> bool:
+    """delivery ~ delivered, category ~ categories, brazil ~ brazilian (not order ~ ordinal)."""
+    if a == b:
+        return True
+    if min(len(a), len(b)) < 5:
+        return False
+    n = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        n += 1
+    return n >= max(5, min(len(a), len(b)) - 3)
+
+
+def _in_vocabulary(word: str, vocab: set[str]) -> bool:
+    return word in vocab or any(_same_stem(word, v) for v in vocab if v[:4] == word[:4])
+
+
+def _content_terms(question: str) -> list[str]:
+    seen, out = set(), []
+    for w in _tokens(question):
+        if w in _ANALYTIC or w.isdigit() or len(w) < 3 or w in seen:
+            continue
+        seen.add(w)
+        out.append(w)
+    return out[:8]
 
 
 def _tokens(s: str) -> list[str]:
@@ -171,6 +222,7 @@ _index_lock = threading.Lock()
 
 
 def invalidate(source_id: str) -> None:
+    _vocab_cache.clear()
     with _index_lock:
         _indexes.pop(source_id, None)
 
@@ -213,6 +265,8 @@ class Retrieval:
     value_hits: list[dict]
     schema_text: str
     ms: float
+    choices: list[dict] = field(default_factory=list)  # set when the user should pick a source
+    route_reason: str = ""
 
 
 def _value_hits(question: str, idx: SourceIndex) -> dict[str, list[str]]:
@@ -300,6 +354,7 @@ def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: 
     bm_max = float(max(bm.max(), 1e-9))
 
     hits_by_source: list[list[TableHit]] = [[] for _ in indexes]
+    value_words: list[set[str]] = [set() for _ in indexes]
     k = 0
     for si, idx in enumerate(indexes):
         dense = idx.table_vecs @ qv if len(idx.table_names) else np.zeros(0)
@@ -308,6 +363,7 @@ def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: 
             cs = idx.col_vecs @ qv
             np.maximum.at(col_best, np.array(idx.col_owner), cs)
         vhits = _value_hits(question, idx)
+        value_words[si] = {w for ms in vhits.values() for m in ms for w in _tokens(m.split("=", 1)[-1])}
         for ti, name in enumerate(idx.table_names):
             b = float(bm[k]) / bm_max
             k += 1
@@ -320,17 +376,45 @@ def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: 
                                                round(float(dense[ti]), 4), round(float(col_best[ti]), 4),
                                                round(b, 4), vh))
 
+    # coverage: how much of the question each source can account for (best match
+    # of every content word among its table/column documents; a real data value = 1)
+    terms = _content_terms(asked)
+    tvecs = embed(terms, query=True) if terms else None
     source_scores = []
     for si, idx in enumerate(indexes):
         top = sorted((h.score for h in hits_by_source[si]), reverse=True)[:3]
+        cov, per_term = 0.0, {}
+        if terms:
+            docs = np.vstack([v for v in (idx.table_vecs, idx.col_vecs) if len(v)])
+            best_sim = (tvecs @ docs.T).max(axis=1)
+            vocab = _vocabulary(idx)
+            for ti, w in enumerate(terms):
+                # named in the schema or a real data value -> covered; otherwise semantic closeness
+                per_term[w] = 1.0 if (w in value_words[si] or _in_vocabulary(w, vocab)) \
+                    else round(float(best_sim[ti]), 3)
+            cov = sum(per_term.values()) / len(terms)
         source_scores.append({"source_id": idx.profile.source_id, "name": idx.profile.source_name,
-                              "score": round(sum(top) / max(len(top), 1), 4)})
+                              "score": round(sum(top) / max(len(top), 1), 4),
+                              "coverage": round(cov, 4), "term_coverage": per_term})
     order = sorted(range(len(indexes)), key=lambda i: source_scores[i]["score"], reverse=True)
     best = order[0]
+    pos = {s["source_id"]: i for i, s in enumerate(source_scores)}
+    choices: list[dict] = []
     pref = next((i for i in order if source_scores[i]["source_id"] == prefer_source), None)
     if pref is not None and source_scores[best]["score"] - source_scores[pref]["score"] <= STICKY_MARGIN:
-        best = pref
-    ambiguous = len(order) > 1 and source_scores[order[0]]["score"] - source_scores[order[1]]["score"] < 0.015
+        best, reason = pref, "follow-up: stayed on the previous question's source"
+    else:
+        d = decide(source_scores)
+        reason = d.reason
+        if d.source_id:
+            best = pos[d.source_id]
+        elif prefer_source and any(c["source_id"] == prefer_source for c in d.candidates):
+            # unclear on its own, but the conversation already picked one of the candidates
+            best, reason = pos[prefer_source], "follow-up: the previous question's source is a candidate"
+        else:  # too close to call: the caller asks the user (schema below is for the leading candidate)
+            best = pos[d.candidates[0]["source_id"]]
+            choices = [{"source_id": c["source_id"], "name": c["name"]} for c in d.candidates]
+    ambiguous = bool(choices)
 
     idx = indexes[best]
     ranked = sorted(hits_by_source[best], key=lambda h: h.score, reverse=True)
@@ -366,6 +450,8 @@ def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: 
         value_hits=value_hits,
         schema_text=schema,
         ms=round((time.perf_counter() - t0) * 1000, 1),
+        choices=choices,
+        route_reason=reason,
     )
 
 
