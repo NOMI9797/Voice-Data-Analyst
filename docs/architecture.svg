@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <title>Voice Data Analyst: system architecture</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <style>
+      .box{fill:#fff;stroke:#94a3b8;stroke-width:1.2}
+      .local{fill:#ecfdf5;stroke:#10b981}
+      .cloud{fill:#eff6ff;stroke:#3b82f6}
+      .safe{fill:#fff7ed;stroke:#f97316}
+      .db{fill:#f8fafc;stroke:#64748b}
+      .zone{fill:none;stroke:#cbd5e1;stroke-dasharray:6 5;stroke-width:1.4}
+      .h{font-weight:700;font-size:14px;fill:#0f172a}
+      .t{fill:#0f172a}
+      .s{fill:#475569;font-size:11.5px}
+      .z{fill:#64748b;font-size:12px;font-weight:700;letter-spacing:.5px}
+      .ln{stroke:#475569;stroke-width:1.4;fill:none;marker-end:url(#a)}
+      .dash{stroke:#3b82f6;stroke-width:1.4;fill:none;stroke-dasharray:5 4;marker-end:url(#a)}
+      .num{fill:#0f172a;font-weight:700;font-size:12px}
+    </style>
+  </defs>
+
+  <rect width="1200" height="860" fill="#ffffff"/>
+  <text x="24" y="34" class="h" font-size="20">Voice Data Analyst: architecture</text>
+  <text x="24" y="54" class="s">Green runs on the user's machine. Blue is the only cloud call (Gemini). Orange are safety layers.</text>
+
+  <!-- zones -->
+  <rect x="16" y="72" width="250" height="400" rx="10" class="zone"/>
+  <text x="30" y="92" class="z">BROWSER (React)</text>
+  <rect x="284" y="72" width="660" height="770" rx="10" class="zone"/>
+  <text x="298" y="92" class="z">BACKEND (FastAPI, Docker) · LOCAL</text>
+  <rect x="962" y="72" width="222" height="400" rx="10" class="zone"/>
+  <text x="976" y="92" class="z">CLOUD</text>
+
+  <!-- browser -->
+  <rect x="34" y="108" width="214" height="86" rx="8" class="box local"/>
+  <text x="46" y="130" class="h">Microphone + VAD</text>
+  <text x="46" y="150" class="s">records, stops after 1.1 s of quiet,</text>
+  <text x="46" y="166" class="s">auto-listens after a clarifying</text>
+  <text x="46" y="182" class="s">question · 16 kHz WAV</text>
+
+  <rect x="34" y="214" width="214" height="104" rx="8" class="box"/>
+  <text x="46" y="236" class="h">Answer view</text>
+  <text x="46" y="256" class="s">chart (Recharts) · sortable table</text>
+  <text x="46" y="272" class="s">CSV export · editable SQL</text>
+  <text x="46" y="288" class="s">choice buttons for clarification</text>
+  <text x="46" y="304" class="s">conversation memory (last 3)</text>
+
+  <rect x="34" y="338" width="214" height="62" rx="8" class="box local"/>
+  <text x="46" y="360" class="h">Speaker</text>
+  <text x="46" y="380" class="s">plays sentence 1 while 2+ synthesize;</text>
+  <text x="46" y="394" class="s">clicking the mic interrupts it</text>
+
+  <rect x="34" y="414" width="214" height="44" rx="8" class="box"/>
+  <text x="46" y="434" class="h">Data sources panel</text>
+  <text x="46" y="450" class="s">connection string or file upload</text>
+
+  <!-- backend request path -->
+  <rect x="304" y="108" width="196" height="62" rx="8" class="box local"/>
+  <text x="316" y="128" class="num">1</text><text x="330" y="128" class="h">Speech-to-text</text>
+  <text x="316" y="146" class="s">faster-whisper base.en (CPU, int8)</text>
+  <text x="316" y="161" class="s">prompted with database names</text>
+
+  <rect x="304" y="186" width="196" height="62" rx="8" class="box local"/>
+  <text x="316" y="206" class="num">2</text><text x="330" y="206" class="h">Domain word correction</text>
+  <text x="316" y="224" class="s">fuzzy spelling + phonetic match</text>
+  <text x="316" y="239" class="s">against 9k real values · 1-5 ms</text>
+
+  <rect x="304" y="264" width="196" height="62" rx="8" class="box safe"/>
+  <text x="316" y="284" class="num">3</text><text x="330" y="284" class="h">Question screen</text>
+  <text x="316" y="302" class="s">instant refusal of writes, secrets,</text>
+  <text x="316" y="317" class="s">personal data, prompt injection</text>
+
+  <rect x="304" y="342" width="196" height="92" rx="8" class="box local"/>
+  <text x="316" y="362" class="num">4</text><text x="330" y="362" class="h">Schema retrieval</text>
+  <text x="316" y="380" class="s">bge-small embeddings + BM25</text>
+  <text x="316" y="395" class="s">+ value hits → relevant tables</text>
+  <text x="316" y="410" class="s">routing: coverage per source;</text>
+  <text x="316" y="425" class="s">unclear → "which database?"</text>
+
+  <rect x="304" y="450" width="196" height="76" rx="8" class="box"/>
+  <text x="316" y="470" class="num">5</text><text x="330" y="470" class="h">Question → SQL</text>
+  <text x="316" y="488" class="s">dialect tips, value matches,</text>
+  <text x="316" y="503" class="s">last turns (follow-ups); vague →</text>
+  <text x="316" y="518" class="s">asks a clarifying question</text>
+
+  <rect x="304" y="542" width="196" height="62" rx="8" class="box safe"/>
+  <text x="316" y="562" class="num">6</text><text x="330" y="562" class="h">SQL guard (sqlglot)</text>
+  <text x="316" y="580" class="s">one read-only SELECT, known tables,</text>
+  <text x="316" y="595" class="s">no PII/secret columns, LIMIT added</text>
+
+  <rect x="304" y="620" width="196" height="62" rx="8" class="box safe"/>
+  <text x="316" y="640" class="num">7</text><text x="330" y="640" class="h">Read-only executor</text>
+  <text x="316" y="658" class="s">read-only session, 15 s timeout,</text>
+  <text x="316" y="673" class="s">max 1,000 rows, per engine</text>
+
+  <rect x="304" y="698" width="196" height="62" rx="8" class="box local"/>
+  <text x="316" y="718" class="num">8</text><text x="330" y="718" class="h">Chart + key facts</text>
+  <text x="316" y="736" class="s">rule-based chart choice; peak,</text>
+  <text x="316" y="751" class="s">share, trend computed exactly</text>
+
+  <rect x="304" y="776" width="196" height="56" rx="8" class="box local"/>
+  <text x="316" y="796" class="num">10</text><text x="336" y="796" class="h">Text-to-speech</text>
+  <text x="316" y="814" class="s">Piper en_US-lessac (local)</text>
+
+  <!-- repair loop -->
+  <rect x="530" y="560" width="190" height="104" rx="8" class="box"/>
+  <text x="542" y="582" class="h">Self repair (max 3)</text>
+  <text x="542" y="600" class="s">guard rejection, database error</text>
+  <text x="542" y="615" class="s">or suspicious result (no rows,</text>
+  <text x="542" y="630" class="s">all NULL, negative counts …)</text>
+  <text x="542" y="645" class="s">→ error sent back to the SQL writer</text>
+  <path d="M500 573 L530 590" class="ln"/>
+  <path d="M500 651 L530 630" class="ln"/>
+  <path d="M625 560 L625 500 L500 488" class="ln"/>
+
+  <rect x="530" y="698" width="190" height="62" rx="8" class="box"/>
+  <text x="542" y="718" class="num">9</text><text x="556" y="718" class="h">Spoken answer</text>
+  <text x="542" y="736" class="s">1-2 sentences from the facts;</text>
+  <text x="542" y="751" class="s">6 s deadline, template fallback</text>
+  <path d="M500 729 L530 729" class="ln"/>
+  <path d="M625 760 L625 804 L500 804" class="ln"/>
+
+  <!-- main vertical flow -->
+  <path d="M402 170 L402 186" class="ln"/>
+  <path d="M402 248 L402 264" class="ln"/>
+  <path d="M402 326 L402 342" class="ln"/>
+  <path d="M402 434 L402 450" class="ln"/>
+  <path d="M402 526 L402 542" class="ln"/>
+  <path d="M402 604 L402 620" class="ln"/>
+  <path d="M402 682 L402 698" class="ln"/>
+
+  <!-- browser <-> backend -->
+  <path d="M248 140 L304 140" class="ln"/>
+  <path d="M304 804 L270 804 L270 370 L248 370" class="ln"/>
+  <path d="M500 735 L515 735 L515 690 L276 690 L276 270 L248 270" class="ln" stroke-dasharray="2 3"/>
+
+  <!-- profiling side -->
+  <rect x="740" y="108" width="186" height="140" rx="8" class="box local"/>
+  <text x="752" y="130" class="h">Schema profiler</text>
+  <text x="752" y="150" class="s">runs once per new source:</text>
+  <text x="752" y="166" class="s">tables, columns, types, samples,</text>
+  <text x="752" y="181" class="s">value lists, row counts,</text>
+  <text x="752" y="196" class="s">declared + inferred joins</text>
+  <text x="752" y="216" class="s">+ LLM descriptions of tables</text>
+  <text x="752" y="231" class="s">and columns (kept on re-profile)</text>
+
+  <rect x="740" y="266" width="186" height="96" rx="8" class="box local"/>
+  <text x="752" y="288" class="h">Profile store</text>
+  <text x="752" y="308" class="s">→ retrieval index (embeddings)</text>
+  <text x="752" y="323" class="s">→ correction vocabulary</text>
+  <text x="752" y="338" class="s">→ allowed tables for the guard</text>
+  <text x="752" y="353" class="s">→ Whisper name hint</text>
+  <path d="M833 248 L833 266" class="ln"/>
+  <path d="M740 320 L500 390" class="ln"/>
+  <path d="M740 300 L500 220" class="ln"/>
+
+  <rect x="740" y="380" width="186" height="80" rx="8" class="box"/>
+  <text x="752" y="402" class="h">Source registry</text>
+  <text x="752" y="422" class="s">connection strings / uploads,</text>
+  <text x="752" y="437" class="s">read-only engines, active flags</text>
+  <text x="752" y="452" class="s">dialect per engine</text>
+  <path d="M833 380 L833 362" class="ln"/>
+
+  <!-- databases -->
+  <rect x="740" y="520" width="186" height="296" rx="8" class="box db"/>
+  <text x="752" y="542" class="h">Data sources</text>
+  <text x="752" y="566" class="t">PostgreSQL · Olist</text>
+  <text x="752" y="582" class="s">9 tables, 1.6 M rows (Brazil)</text>
+  <text x="752" y="606" class="t">MySQL · Chinook</text>
+  <text x="752" y="622" class="s">11 tables, music store</text>
+  <text x="752" y="646" class="t">SQLite · Northwind</text>
+  <text x="752" y="662" class="s">13 tables + views, trading</text>
+  <text x="752" y="686" class="t">CSV / SQLite uploads</text>
+  <text x="752" y="702" class="s">CSV → DuckDB file</text>
+  <text x="752" y="726" class="t">Any new database</text>
+  <text x="752" y="742" class="s">connection string or file only,</text>
+  <text x="752" y="757" class="s">no manual setup</text>
+  <text x="752" y="790" class="s">all access read-only</text>
+  <text x="752" y="805" class="s">(DB user / session / file mode)</text>
+  <path d="M500 674 L740 674" class="ln"/>
+  <path d="M833 520 L833 460" class="ln"/>
+  <path d="M248 442 L728 442 L728 420 L740 420" class="ln"/>
+
+  <!-- cloud -->
+  <rect x="980" y="108" width="186" height="200" rx="8" class="box cloud"/>
+  <text x="992" y="130" class="h">Gemini API</text>
+  <text x="992" y="150" class="s">gemini-3.5-flash-lite, fallback</text>
+  <text x="992" y="165" class="s">chain on overload / timeout /</text>
+  <text x="992" y="180" class="s">broken JSON</text>
+  <text x="992" y="204" class="t" font-size="12">Receives text only:</text>
+  <text x="992" y="222" class="s">question, schema of the few</text>
+  <text x="992" y="237" class="s">relevant tables, matched values,</text>
+  <text x="992" y="252" class="s">≤ 30 result rows for the answer.</text>
+  <text x="992" y="276" class="s">Never audio, credentials, or</text>
+  <text x="992" y="291" class="s">personal-data columns.</text>
+  <path d="M500 480 L960 300" class="dash"/>
+  <path d="M720 730 L960 300" class="dash"/>
+  <path d="M926 200 L980 200" class="dash"/>
+  <text x="976" y="330" class="s" fill="#3b82f6">used by 5, repair, 9</text>
+  <text x="976" y="345" class="s" fill="#3b82f6">and the profiler</text>
+</svg>
