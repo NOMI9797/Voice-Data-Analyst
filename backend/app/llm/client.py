@@ -92,9 +92,33 @@ def chat(messages: list[dict], *, json_mode: bool = False, temperature: float = 
     raise LLMError(f"All LLM models unavailable, last error: {last_exc}") from last_exc
 
 
-def chat_json(messages: list[dict], **kw) -> dict:
-    raw = chat(messages, json_mode=True, **kw)
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise LLMError(f"LLM returned invalid JSON: {raw[:200]}") from exc
+def _parse_json(raw: str) -> dict:
+    text = raw.strip()
+    if text.startswith("```"):  # some models wrap JSON in a code fence despite json mode
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
+    return json.loads(text)
+
+
+def chat_json(messages: list[dict], *, model: str | None = None, fallback: bool = True, **kw) -> dict:
+    """Like chat(), but the reply must be a JSON object. A model that answers with
+    broken JSON (e.g. a thinking model cut off by the token limit) is treated like
+    an unavailable one: the next model in the chain is tried."""
+    chain = _model_chain(model)
+    last = ""
+    for name in (chain if fallback else chain[:1]):
+        try:
+            raw = chat(messages, json_mode=True, model=name, fallback=False, **kw)
+        except LLMError as exc:
+            if str(exc).startswith("LLM call failed"):  # not transient (bad key, bad request)
+                raise
+            last = str(exc)
+            continue
+        try:
+            out = _parse_json(raw)
+            if isinstance(out, dict):
+                return out
+            last = f"{name} returned JSON that is not an object"
+        except json.JSONDecodeError:
+            last = f"{name} returned invalid JSON: {raw[:120]!r}"
+        log.warning("llm %s: %s, trying next model", name, last)
+    raise LLMError(f"All LLM models unavailable or gave invalid JSON; last: {last}")

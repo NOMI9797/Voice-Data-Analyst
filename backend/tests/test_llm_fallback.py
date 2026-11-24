@@ -75,3 +75,27 @@ def test_model_chain_dedupes(monkeypatch):
     monkeypatch.setattr(s, "llm_fallback_models", "m2, m1 ,m3,")
     assert llm._model_chain(None) == ["m1", "m2", "m3"]
     assert llm._model_chain("m3") == ["m3", "m2", "m1"]
+
+
+def test_chat_json_moves_on_from_broken_json(monkeypatch):
+    fc = FakeClient({"thinker": "{\n  \"sql\": \"SELECT", "steady": '{"sql": "select 1"}'})
+    monkeypatch.setattr(llm, "_client", lambda: fc)
+    monkeypatch.setattr(llm, "_model_chain", lambda model: [model] if model else ["thinker", "steady"])
+    assert llm.chat_json([{"role": "user", "content": "q"}]) == {"sql": "select 1"}
+    assert fc.calls == ["thinker", "steady"]
+
+
+def test_chat_json_unwraps_code_fence(monkeypatch):
+    fc = FakeClient({"m": '```json\n{"a": 1}\n```'})
+    monkeypatch.setattr(llm, "_client", lambda: fc)
+    monkeypatch.setattr(llm, "_model_chain", lambda model: [model] if model else ["m"])
+    assert llm.chat_json([{"role": "user", "content": "q"}]) == {"a": 1}
+
+
+def test_chat_json_without_fallback_tries_one_model(monkeypatch):
+    fc = FakeClient({"a": "not json", "b": '{"ok": true}'})
+    monkeypatch.setattr(llm, "_client", lambda: fc)
+    monkeypatch.setattr(llm, "_model_chain", lambda model: [model] if model else ["a", "b"])
+    with pytest.raises(llm.LLMError):
+        llm.chat_json([{"role": "user", "content": "q"}], fallback=False)
+    assert fc.calls == ["a"]

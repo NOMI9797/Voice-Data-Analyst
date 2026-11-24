@@ -134,9 +134,9 @@ def test_parse_generation(raw, sql):
 
 def test_template_answers():
     kpi = {"type": "kpi", "x": "genre", "y": ["total_tracks"]}
-    assert template_answer(["genre", "total_tracks"], [["Rock", 1297]], kpi) == "Rock. Total tracks: 1,297."
-    bar = {"type": "bar", "x": "state", "y": ["orders"]}
-    assert template_answer(["state", "orders"], [["SP", 41746], ["RJ", 12852]], bar).startswith("The top state is SP")
+    assert template_answer(["genre", "total_tracks"], [["Rock", 1297]], kpi) == "Rock, with 1,297 total tracks."
+    bar = {"type": "bar", "x": "state", "y": ["orders"], "column_types": {"state": "category"}}
+    assert template_answer(["state", "orders"], [["SP", 41746], ["RJ", 12852]], bar).startswith("SP is highest")
     assert "nothing matched" in template_answer(["a"], [], {"type": "empty"})
 
 
