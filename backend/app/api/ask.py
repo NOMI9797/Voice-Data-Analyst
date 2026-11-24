@@ -20,8 +20,11 @@ class OptionIn(BaseModel):
 
 
 class PendingIn(BaseModel):
+    kind: str = "source"  # source: which database? | intent: what did you mean?
     question: str
-    options: list[OptionIn] = Field(max_length=5)
+    asked: str = ""
+    options: list[OptionIn | str] = Field(max_length=5)
+    source_id: str | None = None
 
 
 class AskIn(BaseModel):

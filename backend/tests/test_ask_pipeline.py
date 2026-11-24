@@ -25,6 +25,7 @@ def env(monkeypatch):
         return SimpleNamespace(**RETRIEVAL, question=q)
 
     monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
+    monkeypatch.setattr(pipeline, "widen", lambda r, extra: r)
     monkeypatch.setattr(pipeline, "asdict", lambda r: {"source_id": r.source_id})
     monkeypatch.setattr(pipeline, "allowed_tables", lambda sid: TABLES)
 
@@ -217,3 +218,58 @@ def test_speak_false_skips_answer_llm(env, monkeypatch):
     env["db"].append(ok_result())
     out = pipeline.ask("how many orders", speak=False)
     assert out["status"] == "answered" and out["answer_by_llm"] is False and "3" in out["answer"]
+
+
+VAGUE = Generation(sql=None, clarify_question="Top customers by total spending or by number of orders?",
+                   clarify_options=["by total spending", "by number of orders"])
+
+
+def test_vague_question_asks_instead_of_guessing(env):
+    env["gen"].append(VAGUE)
+    out = pipeline.ask("show me the top customers")
+    spoken = "Top customers by total spending or by number of orders: by total spending, or by number of orders?"
+    assert out["status"] == "clarify" and out["answer"] == spoken
+    assert out["clarify"] == {"kind": "intent", "asked": spoken,
+                              "options": VAGUE.clarify_options, "source_id": "src1"}
+    assert not env["ran"]
+
+
+def test_answer_to_clarification_reaches_the_sql_writer(env, monkeypatch):
+    seen = {}
+
+    def gen(question, *a, **k):
+        seen["question"], seen["clarification"] = question, a[-1] if a else k.get("clarification")
+        return Generation(sql="select 1 as customers")
+
+    monkeypatch.setattr(pipeline, "generate_sql", gen)
+    env["db"].append(ok_result(("customers",), ((1,),)))
+    pending = {"kind": "intent", "question": "show me the top customers", "asked": VAGUE.clarify_question,
+               "options": VAGUE.clarify_options, "source_id": "src1"}
+    out = pipeline.ask("by spending", pending=pending)
+    assert out["status"] == "answered"
+    assert seen == {"question": "show me the top customers",
+                    "clarification": {"asked": VAGUE.clarify_question, "answer": "by total spending"}}
+    assert out["question"] == "show me the top customers (by total spending)"
+
+
+def test_never_asks_twice(env):
+    env["gen"].append(VAGUE)  # the model asks again even though the user already answered
+    pending = {"kind": "intent", "question": "show me the top customers", "asked": VAGUE.clarify_question,
+               "options": VAGUE.clarify_options}
+    out = pipeline.ask("by spending", pending=pending)
+    assert out["status"] == "cannot_answer"
+
+
+def test_new_question_while_clarification_pending(env):
+    env["gen"].append(Generation(sql="select count(*) as orders from orders"))
+    env["db"].append(ok_result())
+    pending = {"kind": "intent", "question": "show me the top customers", "asked": "?", "options": ["a", "b"]}
+    out = pipeline.ask("how many orders were placed in 2018", pending=pending)
+    assert out["status"] == "answered" and "clarification" not in out
+
+
+def test_spoken_intent_reads_options():
+    assert pipeline._spoken_intent("How would you like to measure top customers?",
+                                   ["By total spending (revenue)", "By number of orders"]) == \
+        "How would you like to measure top customers: by total spending, or by number of orders?"
+    assert pipeline._spoken_intent("Which one?", ["Olist"]) == "Which one?"

@@ -12,6 +12,7 @@ sentence that can be spoken.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import asdict
 
@@ -19,8 +20,8 @@ from app.config import get_settings
 from app.llm import client as llm
 from app.nl2sql.answer import spoken_answer, template_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
-from app.profiler.retriever import retrieve
-from app.profiler.routing import resolve_choice
+from app.profiler.retriever import retrieve, widen
+from app.profiler.routing import resolve_choice, resolve_intent_reply
 from app.profiler.store import get_store
 from app.safety.executor import QueryError, run_query
 from app.safety.guard import check_sql
@@ -62,11 +63,24 @@ def _spoken_choices(names: list[str]) -> str:
     return f"That could be about the {listed} data. Which one do you mean?"
 
 
+def _spoken_intent(question: str, options: list[str]) -> str:
+    """'How should I rank them?' + options -> 'How should I rank them: by total spending, or by
+    number of orders?' A listener can't see the buttons, so the options are said out loud."""
+    opts = [re.sub(r"\s*\(.*?\)", "", o).strip().rstrip(".?") for o in options if o.strip()]
+    opts = [o[0].lower() + o[1:] if o[:1].isupper() and not o[:2].isupper() else o for o in opts]
+    q = question.strip().rstrip("?").rstrip()
+    if len(opts) < 2:
+        return q + "?"
+    return f"{q}: {', '.join(opts[:-1])}, or {opts[-1]}?"
+
+
 def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] | None = None,
         pending: dict | None = None, speak: bool = True) -> dict:
-    """pending: the clarification we asked last time, {"question": ..., "options": [{source_id, name}]}.
-    If this question is an answer to it ("Olist", "the second one"), the ORIGINAL
-    question is answered on the chosen source; otherwise it is a new question."""
+    """pending: the clarification we asked last time:
+      {"kind": "source", "question": ..., "options": [{source_id, name}]}          which database?
+      {"kind": "intent", "question": ..., "asked": ..., "options": [str], "source_id"}  what did you mean?
+    If this question answers it ("Olist", "by revenue", "the second one"), the ORIGINAL
+    question is answered with that choice; otherwise it is treated as a new question."""
     s = get_settings()
     clock = _Clock()
     out: dict = {"question": question, "status": "", "answer": "", "sql": None, "result": None,
@@ -78,12 +92,22 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         log.info("ask %s in %.0f ms: %s", status, out["timings"]["total"], question[:80])
         return out
 
-    if pending and pending.get("options"):
+    clarification = None
+    if pending and pending.get("kind", "source") == "source" and pending.get("options"):
         chosen = resolve_choice(question, pending["options"])
         if chosen:
             out["chosen_source"] = chosen
             question = out["question"] = pending["question"]
             source_ids = [chosen]
+    elif pending and pending.get("kind") == "intent":
+        answer = resolve_intent_reply(question, pending.get("options") or [])
+        if answer:
+            clarification = {"asked": pending.get("asked", ""), "answer": answer}
+            out["clarification"] = clarification
+            question = pending["question"]
+            out["question"] = f"{question} ({answer})"  # what history and the UI show
+            if pending.get("source_id"):
+                source_ids = [pending["source_id"]]
 
     # 1. screen
     t = time.perf_counter()
@@ -99,15 +123,23 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     hist = (history or [])[-3:]
     prev = hist[-1] if hist else None
     t = time.perf_counter()
-    r = retrieve(question, source_ids, prefer_source=prev.source_id if prev else None,
-                 context=prev.question if prev else "")
+    context = " ".join(x for x in (prev.question if prev else "",
+                                    clarification["answer"] if clarification else "") if x)
+    r = retrieve(question, source_ids, prefer_source=prev.source_id if prev else None, context=context)
     clock.lap("retrieval", t)
     out["retrieval"] = asdict(r)
     if not r.source_id:
         return done("no_source", "No data source is active. Turn one on in the sources panel first.")
     if r.choices:
         out["choices"] = r.choices
-        return done("clarify", _spoken_choices([c["name"] for c in r.choices]))
+        spoken = _spoken_choices([c["name"] for c in r.choices])
+        out["clarify"] = {"kind": "source", "asked": spoken, "options": r.choices}
+        return done("clarify", spoken)
+    if clarification:  # make sure the tables the answer talks about ("money spent") are included
+        t = time.perf_counter()
+        r = widen(r, clarification["answer"])
+        clock.lap("retrieval", t)
+        out["retrieval"] = asdict(r)
     tables = allowed_tables(r.source_id)
     if tables is None:
         return done("not_ready", f"The {r.source_name} database is still being analysed. Try again in a moment.")
@@ -117,14 +149,20 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     hist = [h for h in hist if not h.source_id or h.source_id == r.source_id]
     t = time.perf_counter()
     try:
-        gen: Generation = generate_sql(question, r.schema_text, r.dialect, r.value_hits, hist)
+        gen: Generation = generate_sql(question, r.schema_text, r.dialect, r.value_hits, hist, clarification)
     except llm.LLMError as exc:
         clock.lap("sql generation", t)
         log.warning("generation failed: %s", exc)
         return done("failed", "I couldn't reach the language model just now. Please try again in a moment.")
     clock.lap("sql generation", t)
     out["assumption"] = gen.assumption
-    if not gen.sql and prev and r.source_id == prev.source_id:
+    if not gen.sql and gen.clarify_question and clarification is None:
+        # vague question: ask instead of guessing (never twice for the same question)
+        spoken = _spoken_intent(gen.clarify_question, gen.clarify_options)
+        out["clarify"] = {"kind": "intent", "asked": spoken, "options": gen.clarify_options,
+                          "source_id": r.source_id}
+        return done("clarify", spoken)
+    if not gen.sql and not gen.clarify_question and prev and r.source_id == prev.source_id:
         # We stayed on the previous question's source, but it can't answer this one.
         # Maybe the user changed topic: retry once on the source that fits the
         # question by itself.
@@ -180,7 +218,7 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
                                   "You can see what I tried in the SQL tab.")
         t = time.perf_counter()
         try:
-            fix = repair_sql(question, r.schema_text, r.dialect, sql, error, r.value_hits, hist)
+            fix = repair_sql(question, r.schema_text, r.dialect, sql, error, r.value_hits, hist, clarification)
         except llm.LLMError:
             clock.lap("sql repair", t)
             out["sql"] = sql

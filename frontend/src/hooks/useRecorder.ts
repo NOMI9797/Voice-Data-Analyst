@@ -91,7 +91,13 @@ function encodeWav(samples: Float32Array, rate: number): Blob {
 }
 
 export function useRecorder({ silenceMs = 1100, maxMs = 20000, noSpeechTimeoutMs = 7000, onRecording }: Options) {
-  const [state, setState] = useState<RecorderState>("idle");
+  const [state, setStateRaw] = useState<RecorderState>("idle");
+  // the ref mirrors the state so start() works from stale closures (e.g. auto-listen after speech)
+  const stateRef = useRef<RecorderState>("idle");
+  const setState = useCallback((s: RecorderState) => {
+    stateRef.current = s;
+    setStateRaw(s);
+  }, []);
   const [level, setLevel] = useState(0); // 0..1 for the UI meter
   const [speaking, setSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,10 +154,11 @@ export function useRecorder({ silenceMs = 1100, maxMs = 20000, noSpeechTimeoutMs
       stoppedAt,
       hadSpeech: true,
     });
-  }, [cleanup]);
+  }, [cleanup, setState]);
 
   const start = useCallback(async () => {
-    if (state !== "idle") return;
+    if (stateRef.current !== "idle") return;
+    stateRef.current = "listening"; // claim it now: a second start() during getUserMedia is ignored
     setError(null);
     stoppingRef.current = false;
     chunksRef.current = [];
@@ -214,12 +221,19 @@ export function useRecorder({ silenceMs = 1100, maxMs = 20000, noSpeechTimeoutMs
           : `Microphone error: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
-  }, [state, silenceMs, maxMs, noSpeechTimeoutMs, finish, cleanup]);
+  }, [silenceMs, maxMs, noSpeechTimeoutMs, finish, cleanup, setState]);
 
   const stop = useCallback(() => finish(), [finish]);
-  const done = useCallback(() => setState("idle"), []);
+  const done = useCallback(() => setState("idle"), [setState]);
+  /** Stop listening and throw the recording away (e.g. the user clicked an option instead). */
+  const cancel = useCallback(() => {
+    if (stateRef.current !== "listening") return;
+    stoppingRef.current = true;
+    cleanup();
+    setState("idle");
+  }, [cleanup, setState]);
 
   useEffect(() => cleanup, [cleanup]);
 
-  return { state, level, speaking, error, start, stop, done };
+  return { state, level, speaking, error, start, stop, done, cancel };
 }

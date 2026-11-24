@@ -38,12 +38,13 @@ export function useSpeaker() {
     setSpeaking(false);
   }, []);
 
-  /** Speak text. Resolves when finished (or stopped). onFirstAudio fires when sound starts. */
+  /** Speak text. Resolves true when it played to the end, false if it was stopped
+   *  (barge-in, new question) or failed. onFirstAudio fires when sound starts. */
   const speak = useCallback(
-    async (text: string, onFirstAudio?: (t: number) => void) => {
+    async (text: string, onFirstAudio?: (t: number) => void): Promise<boolean> => {
       stop();
       const sentences = splitSentences(text);
-      if (!sentences.length) return;
+      if (!sentences.length) return false;
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       setSpeaking(true);
@@ -52,7 +53,7 @@ export function useSpeaker() {
       try {
         for (let i = 0; i < urls.length; i++) {
           const url = await urls[i];
-          if (ctrl.signal.aborted) return;
+          if (ctrl.signal.aborted) return false;
           await new Promise<void>((resolve, reject) => {
             const audio = new Audio(url);
             audioRef.current = audio;
@@ -68,8 +69,10 @@ export function useSpeaker() {
             audio.play().catch(reject);
           });
         }
+        return !ctrl.signal.aborted;
       } catch (e) {
         if (!ctrl.signal.aborted) console.error(e);
+        return false;
       } finally {
         if (abortRef.current === ctrl) {
           abortRef.current = null;

@@ -74,3 +74,24 @@ def test_shared_name_words_are_not_distinctive():
 def test_same_stem(a, b, same):
     from app.profiler.retriever import _same_stem
     assert _same_stem(a, b) == same
+
+
+from app.profiler.routing import resolve_intent_reply  # noqa: E402
+
+INTENT = ["by total spending", "by number of orders"]
+
+
+@pytest.mark.parametrize("reply,expect", [
+    ("by spending", "by total spending"),
+    ("number of orders", "by number of orders"),
+    ("orders", "by number of orders"),
+    ("the second one", "by number of orders"),
+    ("first", "by total spending"),
+    ("the last one", "by number of orders"),
+    ("by how much they spent", "by how much they spent"),   # free answer passes through
+    ("revenue please", "revenue please"),
+    ("how many orders were late last month", None),          # a new question
+    ("", None),
+])
+def test_resolve_intent_reply(reply, expect):
+    assert resolve_intent_reply(reply, INTENT) == expect

@@ -20,7 +20,7 @@ import re
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -506,3 +506,31 @@ def render_schema(profile: SourceProfile, tables: list[str]) -> str:
         out.append("")
         out.append("JOINS: " + " | ".join(joins))
     return "\n".join(out)
+
+
+def widen(r: Retrieval, extra_question: str, n: int = 2) -> Retrieval:
+    """Adds the best tables for `extra_question` (searched on its own, same source) to a
+    retrieval. Used when the user answers a clarification ("by money spent"): searched
+    together with the vague question, those words are drowned out by it."""
+    if not r.source_id or not extra_question.strip():
+        return r
+    idx = get_index(r.source_id)
+    if idx is None:
+        return r
+    extra = retrieve(extra_question, [r.source_id])
+    have = [t.table for t in r.tables]
+    add = [t for t in extra.tables if not t.bridge and t.table not in have][:n]
+    if not add:
+        return r
+    tables = list(r.tables) + add
+    names = [t.table for t in tables]
+    by_name = {t.table: t for t in extra.tables}
+    for b in _connect(names, idx.graph):
+        if b not in names and len(tables) < MAX_WITH_BRIDGES + n:
+            h = by_name.get(b) or TableHit(r.source_id, b, 0.0, 0.0, 0.0, 0.0, [], True)
+            h.bridge = True
+            tables.append(h)
+            names.append(b)
+    return Retrieval(**{**asdict(r), "tables": tables,
+                        "value_hits": r.value_hits + [v for v in extra.value_hits if v not in r.value_hits],
+                        "schema_text": render_schema(idx.profile, names)})

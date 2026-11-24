@@ -91,3 +91,45 @@ def resolve_choice(reply: str, options: list[dict]) -> str | None:
         return options[-1]["source_id"]
     hits = {i for i, ws in _ORDINALS.items() if i < len(options) and any(w in ws for w in words)}
     return options[hits.pop()]["source_id"] if len(hits) == 1 else None
+
+
+_QUESTION_START = {"how", "what", "which", "who", "whom", "when", "where", "why", "show", "list", "give",
+                   "tell", "compare", "find", "count", "is", "are", "does", "do", "can"}
+
+
+def _position(words: list[str], n: int) -> int | None:
+    """"second", "the 2nd one", "number 3", "the last one" -> index; "one" alone means the first."""
+    if "last" in words or "latter" in words:
+        return n - 1
+    hits = {i for i, ws in _ORDINALS.items() if i < n and any(w in ws - {"one"} for w in words)}
+    if not hits and "one" in words and len(words) <= 2:
+        hits = {0}
+    return hits.pop() if len(hits) == 1 else None
+
+
+def resolve_intent_reply(reply: str, options: list[str]) -> str | None:
+    """Answer to a clarification like "Top customers by total spending or by number
+    of orders?". Returns the chosen option text, the reply itself when it is a
+    free-form answer ("by how much they spent"), or None when the reply is clearly
+    a new question ("how many orders were late last month")."""
+    words = _words(reply)
+    if not words:
+        return None
+    if words[0] in _QUESTION_START and len(words) >= 4:
+        return None  # a new question, not an answer
+    position_words = set().union(*_ORDINALS.values()) | {"last", "latter", "number", "option", "choice"}
+    if options and len(words) <= 4 and all(w in _FILLER or w in position_words for w in words):
+        i = _position(words, len(options))
+        if i is not None:
+            return options[i]
+    # by content: words that belong to exactly one option ("spending", "orders")
+    reply_set = set(words) | {w.rstrip("s") for w in words}
+    scores = []
+    for o in options:
+        distinctive = set(_words(o)) - _FILLER - {"by", "of", "number", "total"} - set().union(
+            *(set(_words(x)) for x in options if x is not o))
+        distinctive |= {w.rstrip("s") for w in distinctive}
+        scores.append(len(reply_set & distinctive))
+    if options and max(scores) > 0 and scores.count(max(scores)) == 1 and len(words) <= 8:
+        return options[scores.index(max(scores))]
+    return reply.strip() if len(words) <= 12 else None

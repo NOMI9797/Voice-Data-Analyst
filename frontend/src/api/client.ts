@@ -91,7 +91,13 @@ export type SqlRun =
 export type AskStatus = "answered" | "clarify" | "refused" | "cannot_answer" | "failed" | "no_source" | "not_ready";
 
 export type SourceChoice = { source_id: string; name: string };
-export type Pending = { question: string; options: SourceChoice[] };
+export type Clarify =
+  | { kind: "source"; asked: string; options: SourceChoice[] }
+  | { kind: "intent"; asked: string; options: string[]; source_id?: string | null };
+
+/** The clarification we asked, sent back with the next question so a reply like
+ *  "Olist" or "by revenue" answers it. */
+export type Pending = Clarify & { question: string };
 
 export type AskResponse = {
   question: string;
@@ -106,6 +112,8 @@ export type AskResponse = {
   source_id?: string;
   source_name?: string;
   choices?: SourceChoice[];
+  clarify?: Clarify;
+  clarification?: { asked: string; answer: string };
   chosen_source?: string;
   switched_source?: boolean;
   timings: Record<string, number>;

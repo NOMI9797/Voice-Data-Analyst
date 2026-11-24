@@ -54,7 +54,7 @@ export default function AskPanel() {
   const [sqlRunning, setSqlRunning] = useState(false);
   const [reply, setReply] = useState<AskResponse | null>(null);
   const [history, setHistory] = useState<Turn[]>([]);
-  const [pending, setPending] = useState<Pending | null>(null); // "which database?" we asked
+  const [pending, setPending] = useState<Pending | null>(null); // clarification we asked, awaiting a reply
   const [sources, setSources] = useState<Source[]>([]);
   const [scope, setScope] = useState<string>("auto"); // "auto" = all active sources
   const speaker = useSpeaker();
@@ -84,7 +84,7 @@ export default function AskPanel() {
         source_ids: pickSource ? [pickSource] : scope !== "auto" ? [scope] : undefined,
         pending: pickSource ? null : pending,
       });
-      setPending(res.status === "clarify" && res.choices?.length ? { question: res.question, options: res.choices } : null);
+      setPending(res.status === "clarify" && res.clarify ? { ...res.clarify, question: res.question } : null);
       t["ask (server total)"] = Math.round(performance.now() - t0);
       for (const [k, v] of Object.entries(res.timings)) if (k !== "total") t[`· ${k}`] = Math.round(v);
       setReply(res);
@@ -103,13 +103,18 @@ export default function AskPanel() {
         setHistory((h) => [...h, { question: res.question, sql: res.sql!, source_id: res.source_id! }].slice(-3));
       const answer = res.answer;
       const tSpeak = performance.now();
-      speaker.speak(answer, (firstAudio) => {
-        setTimings((prev) => ({
-          ...prev,
-          "TTS first audio": Math.round(firstAudio - tSpeak),
-          ...(speechEndAt ? { "end of question → first audio": Math.round(firstAudio - speechEndAt) } : {}),
-        }));
-      });
+      speaker
+        .speak(answer, (firstAudio) => {
+          setTimings((prev) => ({
+            ...prev,
+            "TTS first audio": Math.round(firstAudio - tSpeak),
+            ...(speechEndAt ? { "end of question → first audio": Math.round(firstAudio - speechEndAt) } : {}),
+          }));
+        })
+        .then((finished) => {
+          // spoken clarification: listen for the answer right away (voice conversations only)
+          if (finished && res.status === "clarify" && speechEndAt !== null) recorder.start();
+        });
       setTimings({ ...t });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -298,13 +303,22 @@ export default function AskPanel() {
           <p className="text-base leading-relaxed">{reply.answer}</p>
           {reply.status === "clarify" && pending && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              {pending.options.map((o, i) => (
-                <button key={o.source_id} onClick={() => { speaker.stop(); handle(pending.question, {}, null, o.source_id); }}
-                  className="rounded-full border border-sky-300 bg-white px-3 py-1 text-sm text-sky-900 hover:bg-sky-100">
-                  {i + 1}. {o.name}
-                </button>
-              ))}
-              <span className="text-xs text-slate-500">…or just say the name</span>
+              {pending.kind === "source"
+                ? pending.options.map((o, i) => (
+                    <button key={o.source_id} onClick={() => { speaker.stop(); recorder.cancel(); handle(pending.question, {}, null, o.source_id); }}
+                      className="rounded-full border border-sky-300 bg-white px-3 py-1 text-sm text-sky-900 hover:bg-sky-100">
+                      {i + 1}. {o.name}
+                    </button>
+                  ))
+                : pending.options.map((o, i) => (
+                    <button key={o} onClick={() => { speaker.stop(); recorder.cancel(); setQuestion(o); handle(o, {}, null); }}
+                      className="rounded-full border border-sky-300 bg-white px-3 py-1 text-sm text-sky-900 hover:bg-sky-100">
+                      {i + 1}. {o}
+                    </button>
+                  ))}
+              <span className="text-xs text-slate-500">
+                …or just {pending.kind === "source" ? "say the name" : "say your answer"}
+              </span>
             </div>
           )}
           {reply.assumption && <p className="mt-1 text-xs text-slate-500">Assumed: {reply.assumption}</p>}
