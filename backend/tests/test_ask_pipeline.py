@@ -207,3 +207,13 @@ def test_unrelated_reply_is_a_new_question(env):
     env["db"].append(ok_result())
     out = pipeline.ask("how many orders were late", pending={"question": "how many customers", "options": OPTIONS})
     assert out["status"] == "answered" and "chosen_source" not in out and out["question"] == "how many orders were late"
+
+
+def test_speak_false_skips_answer_llm(env, monkeypatch):
+    def no_llm(*a, **k):
+        raise AssertionError("spoken_answer must not be called")
+    monkeypatch.setattr(pipeline, "spoken_answer", no_llm)
+    env["gen"].append(Generation(sql="select count(*) as orders from orders"))
+    env["db"].append(ok_result())
+    out = pipeline.ask("how many orders", speak=False)
+    assert out["status"] == "answered" and out["answer_by_llm"] is False and "3" in out["answer"]

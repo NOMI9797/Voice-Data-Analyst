@@ -3,7 +3,7 @@
 Talk to your databases. Ask a business question out loud, and get back a chart, a table, the SQL that was run, and a short spoken explanation. Speech recognition and text-to-speech run locally.
 
 ## Status
-Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded), Step 3 (data source manager), Step 4 (schema profiler + retrieval), Step 5 (question to SQL to spoken answer), Step 6 (local voice in/out), safety layer, Step 7 (domain word correction), Step 8 (chart, table and SQL display).
+Work in progress. Done so far: Step 0 (repo skeleton), Step 1 (Docker skeleton), Step 2 (demo data loaded), Step 3 (data source manager), Step 4 (schema profiler + retrieval), Step 5 (question to SQL to spoken answer), Step 6 (local voice in/out), safety layer, Step 7 (domain word correction), Step 8 (chart, table and SQL display), source routing with clarification, Step 10 (evaluation tooling).
 
 ## Requirements
 - Docker (Docker Desktop, or Colima: `colima start --cpu 4 --memory 5`)
@@ -52,6 +52,21 @@ All connections are read-only at the database level (read-only session or read-o
 ```bash
 docker compose exec backend python -m pytest -q tests
 ```
+
+## Evaluation
+Run from the project folder while the app is up (plain Python 3, no extra packages):
+
+```bash
+python3 eval/run_eval.py --check-gold   # validate the dataset: every gold query runs, no ties at "top N" cut-offs
+python3 eval/run_eval.py                # end-to-end run; writes eval/results/run-<time>.jsonl and .md
+python3 eval/run_eval.py --resume eval/results/run-<time>.jsonl   # continue after a quota stop
+python3 eval/routing_eval.py            # which database a question goes to; no LLM calls
+```
+
+- **Execution accuracy** (`eval/datasets/nl2sql.jsonl`, 36 questions over the three demo databases, plus 7 safety questions). Each question has a hand-written gold query; the app's result and the gold result are compared row by row, ignoring column names, extra columns, row order and rounding to 2 decimals. *Strict* needs the same rows; *lenient* also accepts a ranked list whose first row is a one-row gold answer ("which X has the most Y"). Questions are asked with the source fixed, so routing errors don't count here, and with `speak=false` (template answer) to halve Gemini calls.
+- **Routing** (`eval/datasets/routing.jsonl`, 48 labelled questions, 14 of them ambiguous on purpose). Measures wrong-source picks, ambiguous questions caught, and unnecessary "which database?" questions, and sweeps the two thresholds in `backend/app/profiler/routing.py`.
+
+Results go to `eval/results/` (not committed).
 
 ## Local speech models
 Downloaded automatically on first start into a Docker volume (`models`), then used offline:

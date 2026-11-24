@@ -17,7 +17,7 @@ from dataclasses import asdict
 
 from app.config import get_settings
 from app.llm import client as llm
-from app.nl2sql.answer import spoken_answer
+from app.nl2sql.answer import spoken_answer, template_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
 from app.profiler.retriever import retrieve
 from app.profiler.routing import resolve_choice
@@ -63,7 +63,7 @@ def _spoken_choices(names: list[str]) -> str:
 
 
 def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] | None = None,
-        pending: dict | None = None) -> dict:
+        pending: dict | None = None, speak: bool = True) -> dict:
     """pending: the clarification we asked last time, {"question": ..., "options": [{source_id, name}]}.
     If this question is an answer to it ("Olist", "the second one"), the ORIGINAL
     question is answered on the chosen source; otherwise it is a new question."""
@@ -197,8 +197,11 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     out["result"] = {"ok": True, "sql": out["sql"], **result, "chart": chart}
     clock.lap("chart", t)
     t = time.perf_counter()
-    answer, by_llm = spoken_answer(question, result["columns"], result["rows"], result["row_count"],
-                                   result["truncated"], chart, gen.assumption)
+    if not speak:  # evaluation runs: skip the answer LLM call (half the quota per question)
+        answer, by_llm = template_answer(result["columns"], result["rows"], chart), False
+    else:
+        answer, by_llm = spoken_answer(question, result["columns"], result["rows"], result["row_count"],
+                                       result["truncated"], chart, gen.assumption)
     clock.lap("answer", t)
     out["answer_by_llm"] = by_llm
     if out.get("switched_source"):

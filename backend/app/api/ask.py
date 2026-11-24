@@ -29,6 +29,7 @@ class AskIn(BaseModel):
     history: list[TurnIn] = Field(default_factory=list, max_length=10)
     source_ids: list[str] | None = None
     pending: PendingIn | None = None  # the "which database?" question we asked last time
+    speak: bool = True  # False: template answer instead of an LLM-written one (evaluation runs)
 
 
 @router.post("/ask")
@@ -38,4 +39,4 @@ async def ask_question(body: AskIn) -> dict:
         raise HTTPException(400, "Empty question")
     history = [Turn(t.question, t.sql, t.source_id) for t in body.history]
     pending = body.pending.model_dump() if body.pending else None
-    return await run_in_threadpool(ask, body.question.strip(), history, body.source_ids, pending)
+    return await run_in_threadpool(ask, body.question.strip(), history, body.source_ids, pending, body.speak)
