@@ -273,3 +273,43 @@ def test_spoken_intent_reads_options():
                                    ["By total spending (revenue)", "By number of orders"]) == \
         "How would you like to measure top customers: by total spending, or by number of orders?"
     assert pipeline._spoken_intent("Which one?", ["Olist"]) == "Which one?"
+
+
+def empty_result():
+    return {"columns": ["orders"], "rows": [], "row_count": 0, "truncated": False, "ms": 1.0}
+
+
+def test_empty_result_gets_one_repair(env):
+    env["gen"].append(Generation(sql="select count(*) as orders from orders where status = 'Delivered'"))
+    env["db"] += [empty_result(), ok_result()]
+    env["repairs"].append(Generation(sql="select count(*) as orders from orders where status = 'delivered'"))
+    out = pipeline.ask("how many delivered orders")
+    assert out["status"] == "answered" and "'delivered'" in out["sql"]
+    assert out["attempts"][0]["stage"] == "suspicious" and "no rows" in env["repair_errors"][0]
+    assert "same SQL" in env["repair_errors"][0]
+
+
+def test_model_confirms_empty_result(env):
+    sql = "select count(*) as orders from orders where status = 'lost'"
+    env["gen"].append(Generation(sql=sql))
+    env["db"].append(empty_result())
+    env["repairs"].append(Generation(sql=sql))  # same SQL back: the empty answer is right
+    out = pipeline.ask("how many lost orders")
+    assert out["status"] == "answered" and out["result"]["row_count"] == 0
+    assert out["attempts"][0]["confirmed"] and len(env["ran"]) == 1
+
+
+def test_fix_that_is_no_better_keeps_first_result(env):
+    env["gen"].append(Generation(sql="select count(*) as orders from orders where status = 'x'"))
+    env["db"] += [empty_result(), empty_result()]
+    env["repairs"].append(Generation(sql="select count(*) as orders from orders where status = 'y'"))
+    out = pipeline.ask("how many x orders")
+    assert out["status"] == "answered" and "'x'" in out["sql"] and len(env["ran"]) == 2
+
+
+def test_failed_repair_after_suspicious_keeps_first_result(env):
+    env["gen"].append(Generation(sql="select count(*) as orders from orders where status = 'x'"))
+    env["db"] += [empty_result(), QueryError("syntax error"), QueryError("syntax error"), QueryError("syntax error")]
+    env["repairs"] += [Generation(sql="select bad1"), Generation(sql="select bad2"), Generation(sql="select bad3")]
+    out = pipeline.ask("how many x orders")
+    assert out["status"] == "answered" and "'x'" in out["sql"]

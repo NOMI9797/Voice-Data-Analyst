@@ -18,6 +18,7 @@ from dataclasses import asdict
 
 from app.config import get_settings
 from app.llm import client as llm
+from app.nl2sql.sanity import suspicious
 from app.nl2sql.answer import spoken_answer, template_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
 from app.profiler.retriever import retrieve, widen
@@ -61,6 +62,12 @@ def _spoken_choices(names: list[str]) -> str:
     names = [f"{n}" for n in names]
     listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
     return f"That could be about the {listed} data. Which one do you mean?"
+
+
+def _same_sql(a: str, b: str) -> bool:
+    # whitespace only: case matters inside quoted values ('Delivered' vs 'delivered')
+    norm = lambda q: re.sub(r"\s+", " ", q.strip().rstrip(";"))  # noqa: E731
+    return norm(a) == norm(b)
 
 
 def _spoken_intent(question: str, options: list[str]) -> str:
@@ -187,8 +194,10 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     if not gen.sql:
         return done("cannot_answer", gen.message or f"I can't answer that from the {r.source_name} data.")
 
-    # 4. guard + run, repairing on failure
+    # 4. guard + run, repairing on failure and (once) on a suspicious result
     sql = gen.sql
+    kept = None  # (sql, result) of a run that looked suspicious; used if the "fix" is no better
+    result = None
     for attempt in range(s.max_repair_attempts + 1):
         t = time.perf_counter()
         guard = check_sql(sql, r.dialect, tables, row_limit=s.query_row_limit)
@@ -208,11 +217,26 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
             except QueryError as exc:
                 error = f"Database error: {exc}"
                 out["attempts"].append({"sql": guard.sql, "stage": "database", "error": str(exc)})
+                result = None
             clock.lap("query", t)
             if not error:
-                out["sql"] = guard.sql
-                break
+                issue = suspicious(question, result["columns"], result["rows"], result["truncated"])
+                if issue and kept is None and attempt < s.max_repair_attempts:
+                    kept = (guard.sql, result)
+                    out["attempts"].append({"sql": guard.sql, "stage": "suspicious", "error": issue})
+                    error = (f"The query ran, but the result looks suspicious: {issue}. "
+                             "If the result is actually correct, reply with exactly the same SQL.")
+                else:
+                    if issue and kept is not None:  # the "fix" is no better: keep the first answer
+                        guard_sql, result = kept
+                        out["sql"] = guard_sql
+                    else:
+                        out["sql"] = guard.sql
+                    break
         if attempt == s.max_repair_attempts:
+            if kept is not None:  # repairs after a suspicious result failed: the first result stands
+                out["sql"], result = kept
+                break
             out["sql"] = sql
             return done("failed", "I wrote a query for that but couldn't get it to run. "
                                   "You can see what I tried in the SQL tab.")
@@ -221,10 +245,20 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
             fix = repair_sql(question, r.schema_text, r.dialect, sql, error, r.value_hits, hist, clarification)
         except llm.LLMError:
             clock.lap("sql repair", t)
+            if kept is not None:
+                out["sql"], result = kept
+                break
             out["sql"] = sql
             return done("failed", "I couldn't reach the language model to fix the query. Please try again.")
         clock.lap("sql repair", t)
+        if kept is not None and fix.sql and _same_sql(fix.sql, sql):
+            out["sql"], result = kept  # the model confirms the suspicious-looking result is right
+            out["attempts"][-1]["confirmed"] = True
+            break
         if not fix.sql:
+            if kept is not None:
+                out["sql"], result = kept
+                break
             out["sql"] = sql
             return done("cannot_answer", fix.message or "I couldn't find a way to answer that from this data.")
         sql = fix.sql
