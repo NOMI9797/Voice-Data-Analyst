@@ -142,3 +142,34 @@ def test_executor_timeout_on_sqlite(tmp_path):
         executor.run_query(s.id, endless, timeout_s=1)
     out = executor.run_query(s.id, "SELECT 42 AS answer")
     assert out["columns"] == ["answer"] and out["rows"] == [[42]]
+
+
+
+CUSTOMER_TABLES = {"Customer": ["CustomerId", "FirstName", "LastName", "Country", "Email"],
+                   "Employee": ["EmployeeId", "FirstName", "LastName", "Title"],
+                   "Artist": ["ArtistId", "Name"],
+                   "Customers": ["CustomerID", "CompanyName", "ContactName", "Country"]}
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT FirstName, LastName FROM Customer WHERE Country = 'Brazil'",
+    "SELECT CONCAT(FirstName, ' ', LastName) AS full_name FROM Customer",
+    "SELECT c.LastName AS who FROM Customer c",
+    "SELECT ContactName FROM Customers",
+    "SELECT * FROM Customer",
+])
+def test_private_person_names_are_not_listed(sql):
+    r = check_sql(sql, "mysql", CUSTOMER_TABLES)
+    assert not r.ok and r.code == "personal_data"
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT COUNT(DISTINCT LastName) FROM Customer",                       # aggregate is fine
+    "SELECT Country, COUNT(*) FROM Customer GROUP BY Country",
+    "SELECT e.FirstName, e.LastName, COUNT(*) FROM Employee e JOIN Customer c ON c.CustomerId = e.EmployeeId "
+    "GROUP BY e.FirstName, e.LastName",                                      # staff names are fine
+    "SELECT Name FROM Artist",                                               # public / business names
+    "SELECT CompanyName FROM Customers",
+])
+def test_business_names_and_aggregates_allowed(sql):
+    assert check_sql(sql, "mysql", CUSTOMER_TABLES).ok

@@ -58,11 +58,20 @@ def load(path: Path) -> list[dict]:
 
 # ------------------------------------------------------------------ gold check
 
+def _gold_items(items: list[dict]) -> list[dict]:
+    """Single questions plus every turn of a conversation that has a gold query."""
+    out = []
+    for it in items:
+        if "turns" in it:
+            out += [{**t, "id": f"{it['id']}.{n}", "source": it["source"]} for n, t in enumerate(it["turns"], 1)]
+        else:
+            out.append(it)
+    return [i for i in out if "gold" in i]
+
+
 def check_gold(api: str, items: list[dict], ids: dict[str, str]) -> int:
     problems = 0
-    for it in items:
-        if "gold" not in it:
-            continue
+    for it in _gold_items(items):
         res = post(api, "/api/sql/run", {"source_id": ids[it["source"]], "sql": it["gold"]})
         if not res.get("ok"):
             problems += 1
@@ -85,13 +94,45 @@ def check_gold(api: str, items: list[dict], ids: dict[str, str]) -> int:
 
 # ------------------------------------------------------------------ run
 
-def run_one(api: str, it: dict, ids: dict[str, str], gold_cache: dict) -> dict:
+def run_conversation(api: str, it: dict, ids: dict[str, str], gold_cache: dict, delay: float) -> dict:
+    """Asks the turns in order, carrying history (and a pending clarification) like the UI does.
+    The conversation is correct only if every turn is."""
+    history, pending, turns = [], None, []
+    for n, turn in enumerate(it["turns"], 1):
+        sub = {**turn, "id": f"{it['id']}.{n}", "source": it["source"], "level": it["level"]}
+        r = run_one(api, sub, ids, gold_cache, history=history, pending=pending)
+        turns.append(r)
+        if "error" in r:
+            r.pop("_raw", None)
+            return {"id": it["id"], "source": it["source"], "level": it["level"], "q": it["turns"][0]["q"],
+                    "turns": turns, "error": r["error"]}
+        res = r.pop("_raw")
+        pending = ({**res["clarify"], "question": res["question"]} if res["status"] == "clarify" and res.get("clarify")
+                   else None)
+        if res["status"] == "answered" and res.get("sql") and res.get("source_id"):
+            history = (history + [{"question": res["question"], "sql": res["sql"], "source_id": res["source_id"]}])[-3:]
+        if n < len(it["turns"]):
+            time.sleep(delay)
+    ok = all(t["correct"] for t in turns)
+    return {"id": it["id"], "source": it["source"], "level": it["level"],
+            "q": " → ".join(t["q"] for t in it["turns"]), "status": turns[-1].get("status"),
+            "correct": ok, "lenient": all(t["lenient"] for t in turns), "turns": turns,
+            "reason": "; ".join(f"turn {i}: {t['reason']}" for i, t in enumerate(turns, 1) if not t["correct"])
+                      or "all turns correct",
+            "repairs": sum(t.get("repairs", 0) for t in turns), "timings": turns[-1].get("timings", {}),
+            "sql": turns[-1].get("sql"), "gold_sql": turns[-1].get("gold_sql")}
+
+
+def run_one(api: str, it: dict, ids: dict[str, str], gold_cache: dict, history: list | None = None,
+            pending: dict | None = None) -> dict:
     t0 = time.perf_counter()
+    body = {"question": it["q"], "source_ids": [ids[it["source"]]], "speak": False,
+            "history": history or [], "pending": pending}
     try:
-        res = post(api, "/api/ask", {"question": it["q"], "source_ids": [ids[it["source"]]], "speak": False})
+        res = post(api, "/api/ask", body)
     except urllib.error.URLError as exc:
         return {"id": it["id"], "error": f"request failed: {exc}"}
-    out = {"id": it["id"], "source": it["source"], "level": it["level"], "q": it["q"], "status": res["status"],
+    out = {"_raw": res, "id": it["id"], "source": it["source"], "level": it["level"], "q": it["q"], "status": res["status"],
            "answer": res["answer"], "sql": res.get("sql"), "repairs": len(res.get("attempts") or []),
            "timings": res.get("timings", {}), "wall_ms": round((time.perf_counter() - t0) * 1000)}
     if res["status"] == "failed" and any(w in res["answer"] for w in QUOTA_WORDS):
@@ -118,8 +159,11 @@ def pct(n: int, d: int) -> str:
 
 
 def report(rows: list[dict], path: Path) -> str:
-    sql_rows = [r for r in rows if r.get("level") != "safety" and "correct" in r]
+    sql_rows = [r for r in rows if r.get("level") not in ("safety", "followup", "clarify") and "correct" in r]
     safety = [r for r in rows if r.get("level") == "safety" and "correct" in r]
+    follow = [r for r in rows if r.get("level") == "followup" and "correct" in r]
+    clar = [r for r in rows if r.get("level") == "clarify" and "correct" in r]
+    asked_clear = [r for r in sql_rows if r.get("status") == "clarify"]
     lines = [f"# Evaluation report", f"", f"Run file: `{path.name}` · {len(rows)} questions", ""]
     lines += ["## Execution accuracy", "",
               "| Group | Strict | Lenient |", "|---|---|---|",
@@ -137,7 +181,20 @@ def report(rows: list[dict], path: Path) -> str:
               "the one-row gold answer.", ""]
     if safety:
         lines += ["## Safety", "", f"Correctly refused or declined: {pct(sum(r['correct'] for r in safety), len(safety))}", ""]
-    answered = [r for r in sql_rows if r.get("status") == "answered"]
+    if follow:
+        turns = [t for r in follow for t in r["turns"]]
+        lines += ["## Voice follow-ups", "",
+                  f"Conversations fully correct: {pct(sum(r['correct'] for r in follow), len(follow))}; "
+                  f"individual turns correct: {pct(sum(t['correct'] for t in turns), len(turns))}", ""]
+        lines += [f"- {r['id']}: {r['q']} → {'ok' if r['correct'] else r['reason']}" for r in follow] + [""]
+    if clar or sql_rows:
+        lines += ["## Clarification", ""]
+        if clar:
+            lines.append(f"Vague questions handled as expected (asked, and answered correctly after the reply): "
+                         f"{pct(sum(r['correct'] for r in clar), len(clar))}")
+        lines.append(f"Clear questions that were asked about unnecessarily: {pct(len(asked_clear), len(sql_rows))}")
+        lines.append("")
+    answered = [r for r in sql_rows if r.get("status") == "answered" and r.get("timings")]
     if answered:
         def stat(vals):
             vals = sorted(v for v in vals if v is not None)
@@ -203,7 +260,11 @@ def main() -> None:
 
     gold_cache: dict = {}
     for n, it in enumerate(todo, 1):
-        r = run_one(args.api, it, ids, gold_cache)
+        if "turns" in it:
+            r = run_conversation(args.api, it, ids, gold_cache, args.delay)
+        else:
+            r = run_one(args.api, it, ids, gold_cache)
+            r.pop("_raw", None)
         done[it["id"]] = r
         with path.open("a") as f:
             f.write(json.dumps(r) + "\n")

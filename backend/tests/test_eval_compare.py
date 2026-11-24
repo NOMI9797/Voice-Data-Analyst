@@ -61,3 +61,10 @@ def test_duplicate_values_handled():
 
 def test_both_empty():
     assert compare(["n"], [], ["x", "y"], []).strict
+
+
+def test_month_bucket_formats_match():
+    gold = [["2017-01", 800], ["2017-02", 1780]]
+    pred = [["2017-01-01 00:00:00+00:00", 800], ["2017-02-01", 1780]]
+    assert compare(["month", "n"], gold, ["month", "orders"], pred).strict
+    assert norm("2017-03-15") == "2017-03-15"  # a real day is kept

@@ -21,7 +21,7 @@ from app.llm import client as llm
 from app.nl2sql.sanity import suspicious
 from app.nl2sql.answer import spoken_answer, template_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
-from app.profiler.retriever import retrieve, widen
+from app.profiler.retriever import add_tables, retrieve, tables_named_in, widen
 from app.profiler.routing import resolve_choice, resolve_intent_reply
 from app.profiler.store import get_store
 from app.safety.executor import QueryError, run_query
@@ -205,6 +205,10 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         error = ""
         if not guard.ok:
             error = f"Rejected by the safety checker: {guard.reason}"
+            if guard.code == "personal_data":
+                error += (" Do not return other personal details (names, contact data) instead. If the "
+                          "question asks for personal details about individuals, set sql to null and say "
+                          "in message that you can give counts or summaries instead.")
             out["attempts"].append({"sql": sql, "stage": "guard", "error": guard.reason, "code": guard.code})
             if guard.code in HARD_STOP:
                 # a write or a secret is never "repaired" into something else; stop here
@@ -240,6 +244,13 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
             out["sql"] = sql
             return done("failed", "I wrote a query for that but couldn't get it to run. "
                                   "You can see what I tried in the SQL tab.")
+        # The writer may have used a real table that retrieval left out, guessing its columns
+        # ("products.product_name"): show it that table's actual schema for the repair.
+        wider = add_tables(r, tables_named_in(sql, r.source_id))
+        if wider is not r:
+            r = wider
+            out["retrieval"] = asdict(r)
+            error += " The schema above now also lists the tables you used; use their exact column names."
         t = time.perf_counter()
         try:
             fix = repair_sql(question, r.schema_text, r.dialect, sql, error, r.value_hits, hist, clarification)

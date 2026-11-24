@@ -14,7 +14,8 @@ Rules
      this also blocks system catalogs (pg_catalog, information_schema, mysql.user,
      sqlite_master ...) and table functions like read_csv('/etc/passwd')
   6. secret columns (passwords, tokens, card numbers) are never selected;
-     personal data columns (email, phone, address ...) may be counted or used in
+     personal data columns (email, phone, address, and the names of customers or
+     other private people, even inside CONCAT) may be counted or used in
      filters, but not returned as raw values
   7. a row LIMIT is always present (added or lowered)
 
@@ -67,6 +68,14 @@ SECRET_COLUMN = re.compile(
 PII_COLUMN = re.compile(
     r"(e_?mail|phone|mobile|fax|cpf|cnpj|birth|dob|passport|national_?id|tax_?id"
     r"|(^|_)address|address$|street|ip_?addr)", re.I)
+# Names of PRIVATE people (customers, users ...) are personal data too. Names of
+# employees, artists, products and companies are not blocked: staff names are normal
+# in internal reports ("which sales rep has the most customers").
+PERSON_NAME_COLUMN = re.compile(
+    r"^((first|last|full|given|family|middle|sur|fore|contact|customer|client|user|member|patient)_?name"
+    r"|surname|forename)$", re.I)
+PRIVATE_PERSON_TABLE = re.compile(
+    r"(customer|client|user|member|patient|contact|person|people|subscriber|guest|student|account)", re.I)
 
 
 @dataclass
@@ -207,14 +216,41 @@ def _outer_selects(root: exp.Expression) -> list[exp.Select]:
     return [root] if isinstance(root, exp.Select) else []
 
 
+def _private_name_check(root: exp.Expression, allowed: dict[str, list[str]], used: list[str]):
+    """Returns is_private(column) for person-name columns of customer-like tables. The
+    column's table is resolved through its alias, so Employee.FirstName stays allowed
+    next to Customer.FirstName; an unqualified column counts as private if any
+    customer-like table in the query has it."""
+    private = {t: {c.lower() for c in allowed.get(t, []) if PERSON_NAME_COLUMN.search(c)}
+               for t in used if PRIVATE_PERSON_TABLE.search(t.rsplit(".", 1)[-1])}
+    private = {t: cols for t, cols in private.items() if cols}
+    if not private:
+        return lambda col: False
+    by_short = {t.rsplit(".", 1)[-1].lower(): t for t in used}
+    aliases = {}
+    for tbl in root.find_all(exp.Table):
+        target = by_short.get(tbl.name.lower())
+        if target:
+            aliases[(tbl.alias or tbl.name).lower()] = target
+
+    def is_private(col: exp.Column) -> bool:
+        name = col.name.lower()
+        if col.table:
+            return name in private.get(aliases.get(col.table.lower(), ""), set())
+        return any(name in cols for cols in private.values())
+    return is_private
+
+
 def _pii_in_output(root: exp.Expression, allowed: dict[str, list[str]], used: list[str]) -> str:
     """Reject raw personal-data values in the final output. Aggregates (COUNT(email)) are fine."""
+    is_private_name = _private_name_check(root, allowed, used)
     for sel in _outer_selects(root):
         for proj in sel.expressions:
             node = proj.this if isinstance(proj, exp.Alias) else proj
             if isinstance(node, exp.Star) or (isinstance(node, exp.Column) and isinstance(node.this, exp.Star)):
                 for t in used:
-                    cols = [c for c in allowed.get(t, []) if SECRET_COLUMN.search(c) or PII_COLUMN.search(c)]
+                    cols = [c for c in allowed.get(t, []) if SECRET_COLUMN.search(c) or PII_COLUMN.search(c)
+                            or (PRIVATE_PERSON_TABLE.search(t.rsplit(".", 1)[-1]) and PERSON_NAME_COLUMN.search(c))]
                     if cols:
                         return (f"SELECT * would return personal data ({', '.join(cols[:3])}). "
                                 "Ask for specific, non-personal columns instead.")
@@ -222,7 +258,7 @@ def _pii_in_output(root: exp.Expression, allowed: dict[str, list[str]], used: li
             if node.find(exp.AggFunc):
                 continue  # COUNT(email), COUNT(DISTINCT phone) ... are fine
             for col in node.find_all(exp.Column):
-                if col.name and PII_COLUMN.search(col.name):
+                if col.name and (PII_COLUMN.search(col.name) or is_private_name(col)):
                     return (f"Listing {col.name} would expose personal data. "
                             "I can count or group by it, but not show individual values.")
     return ""

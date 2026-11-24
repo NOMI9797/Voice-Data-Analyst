@@ -8,6 +8,7 @@ different but equivalent queries count as correct:
   * row order is ignored
   * numbers are compared after rounding to 2 decimals (1 == 1.0, 4.0849 ~ 4.08)
   * text is compared trimmed (case kept: 'SP' and 'sp' are different answers)
+  * month buckets compare equal whatever their format ('2017-03' == '2017-03-01')
 
 `lenient` additionally accepts a "which X has the most Y" answer where the gold
 is one row and the prediction is a ranked list whose FIRST row is that row: the
@@ -17,11 +18,16 @@ Pure Python, no dependencies.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 from itertools import product
 
 MAX_MAPPINGS = 5000
+# Month buckets arrive as '2017-03', '2017-03-01' or '2017-03-01 00:00:00' depending on
+# the query; both sides are normalized the same way, so they compare equal.
+_DATE_TIME = re.compile(r"^(\d{4}-\d{2}-\d{2})[ T]00:00:00(\.0+)?([+-]\d{2}:?\d{2}|Z)?$")
+_MONTH_START = re.compile(r"^(\d{4}-\d{2})-01$")
 
 
 def norm(v):
@@ -32,7 +38,8 @@ def norm(v):
     if isinstance(v, (int, float)):
         return round(float(v), 2) + 0.0  # + 0.0 turns -0.0 into 0.0
     if isinstance(v, str):
-        s = v.strip()
+        s = _DATE_TIME.sub(r"\1", v.strip())  # '2017-03-01 00:00:00+00:00' -> '2017-03-01'
+        s = _MONTH_START.sub(r"\1", s)        # '2017-03-01' -> '2017-03' (a month bucket)
         try:  # numbers that arrive as text (DECIMAL as string)
             if s and s.lstrip("-").replace(".", "", 1).isdigit():
                 return round(float(s), 2) + 0.0

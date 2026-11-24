@@ -32,6 +32,8 @@ Rules:
 - Put the label/dimension column first and the measures after it.
 - For trends over time, group by a time bucket and ORDER BY it ascending.
 - Relative dates ("last quarter", "this year", "last month", "recently") are relative to the LATEST date in the data (see the column ranges), not to today's date: the data may end years ago.
+- In a follow-up, a relative period refers to the earlier query's period: after a question about 2017, "same for last year" means 2016, and "the month before" means the month before the one used.
+- A follow-up ("now break it down by month", "same for last year", "what about France?") EDITS the most recent earlier query: keep its filters, measures and grouping, and change only what the follow-up asks for.
 - For rankings ("top", "most", "best", "worst"), ORDER BY the measure and LIMIT to the number asked (default 10).
 - Use values exactly as they appear in the data (see VALUE MATCHES and the column value lists); match text case-insensitively when unsure.
 - Join along the JOINS listed in the schema.

@@ -122,6 +122,7 @@ export type AskResponse = {
 export type Turn = { question: string; sql: string; source_id: string };
 
 export const api = {
+  sttHint: () => request<{ hint: string }>("/correct/hint"),
   ask: (question: string, history: Turn[] = [], opts: { source_ids?: string[]; pending?: Pending | null } = {}) =>
     request<AskResponse>("/ask", {
       method: "POST",

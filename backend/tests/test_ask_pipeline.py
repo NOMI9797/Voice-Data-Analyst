@@ -26,6 +26,8 @@ def env(monkeypatch):
 
     monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
     monkeypatch.setattr(pipeline, "widen", lambda r, extra: r)
+    monkeypatch.setattr(pipeline, "tables_named_in", lambda sql, sid: [])
+    monkeypatch.setattr(pipeline, "add_tables", lambda r, names: r)
     monkeypatch.setattr(pipeline, "asdict", lambda r: {"source_id": r.source_id})
     monkeypatch.setattr(pipeline, "allowed_tables", lambda sid: TABLES)
 
@@ -313,3 +315,29 @@ def test_failed_repair_after_suspicious_keeps_first_result(env):
     env["repairs"] += [Generation(sql="select bad1"), Generation(sql="select bad2"), Generation(sql="select bad3")]
     out = pipeline.ask("how many x orders")
     assert out["status"] == "answered" and "'x'" in out["sql"]
+
+
+
+def test_repair_gets_schema_of_tables_the_sql_used(env, monkeypatch):
+    added = {}
+
+    def fake_add(r, names):
+        added["names"] = names
+        return SimpleNamespace(**{**vars(r), "schema_text": "TABLE orders ...\nTABLE Products ProductName"})
+
+    monkeypatch.setattr(pipeline, "tables_named_in", lambda sql, sid: ["Products"])
+    monkeypatch.setattr(pipeline, "add_tables", fake_add)
+    monkeypatch.setattr(pipeline, "asdict", lambda r: {"source_id": r.source_id})
+    seen = {}
+
+    def repair(q, schema, dialect, bad, error, *a, **k):
+        seen["schema"], seen["error"] = schema, error
+        return Generation(sql="select ProductName as product from Products")
+
+    monkeypatch.setattr(pipeline, "repair_sql", repair)
+    monkeypatch.setattr(pipeline, "allowed_tables", lambda sid: {**TABLES, "Products": ["ProductID", "ProductName"]})
+    env["gen"].append(Generation(sql="select p.product_name from products p"))
+    env["db"] += [QueryError("no such column: p.product_name"), ok_result(("product",), (("Chai",),))]
+    out = pipeline.ask("which products sell best")
+    assert out["status"] == "answered" and added["names"] == ["Products"]
+    assert "ProductName" in seen["schema"] and "exact column names" in seen["error"]

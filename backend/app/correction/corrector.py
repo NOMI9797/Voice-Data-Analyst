@@ -278,6 +278,10 @@ def correct(text: str, vocab: Vocabulary | None = None) -> CorrectionResult:
                 e = vocab.entries[idx]
                 if abs(e.n_words - n) > 2:
                     continue
+                # a span longer than the value must not swallow an ordinary word at its edge:
+                # "led zeppelin have" -> "Led Zeppelin" would delete "have"
+                if n > e.n_words and (_is_common(span_words[0]) or _is_common(span_words[-1])):
+                    continue
                 spelling = fuzz.ratio(compact, e.compact)
                 sound = fuzz.ratio(phon, e.phon) if phon and e.phon else 0.0
                 score = 0.55 * spelling + 0.45 * sound
@@ -288,6 +292,10 @@ def correct(text: str, vocab: Vocabulary | None = None) -> CorrectionResult:
                     score += 6.0
                 # short strings need near-exact matches
                 if len(e.compact) <= 4 and spelling < 85:
+                    continue
+                # one word changed on sound alone is too risky ("aussie" -> the city "assai"):
+                # it must also be spelled fairly alike
+                if n == 1 and spelling < 75:
                     continue
                 # a single common English word may only become a value that sounds identical
                 if n == 1 and _is_common(span_words[0]) and (sound < 100 or spelling < 75):
@@ -323,6 +331,8 @@ def correct(text: str, vocab: Vocabulary | None = None) -> CorrectionResult:
             if c.score < 90 or any(not (c.start <= exact[k][0] and exact[k][1] <= c.end
                                         and exact[k][1] - exact[k][0] < c.end - c.start) for k in inner):
                 continue
+            if any(exact[k][2].norm == normalize(c.corrected) for k in inner):
+                continue  # same value as the exact match inside: it would only swallow extra words
             dropped_exact.update(inner)
         chosen.append(c)
         taken |= span

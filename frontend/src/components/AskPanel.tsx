@@ -63,6 +63,11 @@ export default function AskPanel() {
     api.listSources().then(setSources).catch(() => {});
   }
   useEffect(loadSources, []);
+  // real database names, given to speech-to-text as a prompt so it hears them better
+  const [sttHint, setSttHint] = useState("");
+  useEffect(() => {
+    api.sttHint().then((h) => setSttHint(h.hint)).catch(() => {});
+  }, [sources]);
   const active = sources.filter((s) => s.active);
   useEffect(() => {
     if (scope !== "auto" && !active.some((s) => s.id === scope)) setScope("auto");
@@ -132,7 +137,7 @@ export default function AskPanel() {
       }
       try {
         const t0 = performance.now();
-        const tr = await api.stt(rec.wav);
+        const tr = await api.stt(rec.wav, sttHint);
         const t: Timings = {
           "silence wait (VAD)": Math.round(rec.stoppedAt - rec.speechEndAt),
           "speech-to-text": Math.round(performance.now() - t0),

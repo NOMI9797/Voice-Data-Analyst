@@ -534,3 +534,39 @@ def widen(r: Retrieval, extra_question: str, n: int = 2) -> Retrieval:
     return Retrieval(**{**asdict(r), "tables": tables,
                         "value_hits": r.value_hits + [v for v in extra.value_hits if v not in r.value_hits],
                         "schema_text": render_schema(idx.profile, names)})
+
+
+def add_tables(r: Retrieval, names: list[str]) -> Retrieval:
+    """Adds named tables of the same source (plus join paths) to a retrieval. Used by
+    self repair: the SQL writer referred to a real table that retrieval had left out."""
+    idx = get_index(r.source_id) if r.source_id else None
+    if idx is None:
+        return r
+    have = [t.table for t in r.tables]
+    add = [n for n in names if n not in have and idx.profile.table(n) is not None]
+    if not add:
+        return r
+    tables = list(r.tables) + [TableHit(r.source_id, n, 0.0, 0.0, 0.0, 0.0, []) for n in add]
+    names_all = [t.table for t in tables]
+    for b in _connect(names_all, idx.graph):
+        if b not in names_all:
+            tables.append(TableHit(r.source_id, b, 0.0, 0.0, 0.0, 0.0, [], True))
+            names_all.append(b)
+    return Retrieval(**{**asdict(r), "tables": tables, "schema_text": render_schema(idx.profile, names_all)})
+
+
+def tables_named_in(sql: str, source_id: str) -> list[str]:
+    """Real tables of the source that the SQL mentions, matched case-insensitively and
+    ignoring underscores/spaces ("order_details" -> "Order Details")."""
+    idx = get_index(source_id)
+    if idx is None:
+        return []
+    flat = re.sub(r"[\s_\"`\[\]]+", "", sql.lower())
+    words = set(re.findall(r"[a-z0-9]+", re.sub(r"[_\"`]", " ", sql.lower())))
+    out = []
+    for t in idx.profile.tables:
+        key = re.sub(r"[\s_]+", "", t.name.lower())
+        short = key.rsplit(".", 1)[-1]
+        if short in words or (len(short) > 5 and short in flat):
+            out.append(t.name)
+    return out

@@ -52,3 +52,13 @@ def test_entities_and_locations_reported():
     r = correct("sales of chai in curitiba", VOCAB)
     values = {e["value"]: e["locations"][0]["column"] for e in r.entities}
     assert values == {"Chai": "ProductName", "curitiba": "customer_city"}
+
+
+
+@pytest.mark.parametrize("text", [
+    "How many albums does Led Zeppelin have?",
+    "how many songs do pink floid have",
+])
+def test_words_next_to_a_name_are_kept(text):
+    r = correct(text, VOCAB)
+    assert r.corrected.rstrip("?").split()[-1] == "have"

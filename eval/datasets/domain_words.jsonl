@@ -1,0 +1,70 @@
+{"id": "rt-01", "text": "How many customers live in Curitiba?", "entities": ["Curitiba"]}
+{"id": "rt-02", "text": "How many orders came from Belo Horizonte?", "entities": ["Belo Horizonte"]}
+{"id": "rt-03", "text": "How many sellers are in Ribeirao Preto?", "entities": ["Ribeirao Preto"]}
+{"id": "rt-04", "text": "What is the average freight to Florianopolis?", "entities": ["Florianopolis"]}
+{"id": "rt-05", "text": "How many orders came from Porto Alegre?", "entities": ["Porto Alegre"]}
+{"id": "rt-06", "text": "Compare customers in Campinas and Goiania.", "entities": ["Campinas", "Goiania"]}
+{"id": "rt-07", "text": "How many sellers are based in Sao Jose dos Campos?", "entities": ["Sao Jose dos Campos"]}
+{"id": "rt-08", "text": "Show orders from customers in Niteroi.", "entities": ["Niteroi"]}
+{"id": "rt-09", "text": "How many products are in the cama mesa banho category?", "entities": ["cama mesa banho"]}
+{"id": "rt-10", "text": "What is the revenue of the beleza saude category?", "entities": ["beleza saude"]}
+{"id": "rt-11", "text": "How many items were sold in watches gifts?", "entities": ["watches gifts"]}
+{"id": "rt-12", "text": "How many albums does Led Zeppelin have?", "entities": ["Led Zeppelin"]}
+{"id": "rt-13", "text": "Show all tracks by Pink Floyd.", "entities": ["Pink Floyd"]}
+{"id": "rt-14", "text": "How many songs did Iron Maiden record?", "entities": ["Iron Maiden"]}
+{"id": "rt-15", "text": "What is the longest Metallica song?", "entities": ["Metallica"]}
+{"id": "rt-16", "text": "How many tracks does Os Paralamas Do Sucesso have?", "entities": ["Os Paralamas Do Sucesso"]}
+{"id": "rt-17", "text": "List the albums of Antonio Carlos Jobim.", "entities": ["Antonio Carlos Jobim"]}
+{"id": "rt-18", "text": "How many sales did Alanis Morissette get?", "entities": ["Alanis Morissette"]}
+{"id": "rt-19", "text": "Show tracks by Creedence Clearwater Revival.", "entities": ["Creedence Clearwater Revival"]}
+{"id": "rt-20", "text": "How many songs do the Red Hot Chili Peppers have?", "entities": ["Red Hot Chili Peppers"]}
+{"id": "rt-21", "text": "What did Jamiroquai sell last year?", "entities": ["Jamiroquai"]}
+{"id": "rt-22", "text": "Compare Caetano Veloso and Gilberto Gil.", "entities": ["Caetano Veloso", "Gilberto Gil"]}
+{"id": "rt-23", "text": "How many tracks did Ozzy Osbourne release?", "entities": ["Ozzy Osbourne"]}
+{"id": "rt-24", "text": "How many Bossa Nova tracks are there?", "entities": ["Bossa Nova"]}
+{"id": "rt-25", "text": "What is the total length of Reggae songs?", "entities": ["Reggae"]}
+{"id": "rt-26", "text": "How many units of Chai were sold?", "entities": ["Chai"]}
+{"id": "rt-27", "text": "What is the price of Gnocchi di nonna Alice?", "entities": ["Gnocchi di nonna Alice"]}
+{"id": "rt-28", "text": "How much Queso Cabrales is in stock?", "entities": ["Queso Cabrales"]}
+{"id": "rt-29", "text": "Show sales of Mozzarella di Giovanni.", "entities": ["Mozzarella di Giovanni"]}
+{"id": "rt-30", "text": "How many orders included Sir Rodney's Scones?", "entities": ["Sir Rodney's Scones"]}
+{"id": "rt-31", "text": "What is the revenue of Gorgonzola Telino?", "entities": ["Gorgonzola Telino"]}
+{"id": "rt-32", "text": "How many Camembert Pierrot orders were there?", "entities": ["Camembert Pierrot"]}
+{"id": "rt-33", "text": "Show the stock of Raclette Courdavault.", "entities": ["Raclette Courdavault"]}
+{"id": "rt-34", "text": "How many Tarte au sucre were sold?", "entities": ["Tarte au sucre"]}
+{"id": "rt-35", "text": "Which products does Exotic Liquids supply?", "entities": ["Exotic Liquids"]}
+{"id": "rt-36", "text": "How many orders did Alfreds Futterkiste place?", "entities": ["Alfreds Futterkiste"]}
+{"id": "rt-37", "text": "What is the price of Konbu and Ikura?", "entities": ["Konbu", "Ikura"]}
+{"id": "rt-38", "text": "How many Pavlova were ordered?", "entities": ["Pavlova"]}
+{"id": "mh-01", "heard": "how many customers live in cartiba", "entities": ["Curitiba"]}
+{"id": "mh-02", "heard": "orders from below horizonte", "entities": ["Belo Horizonte"]}
+{"id": "mh-03", "heard": "how many albums does led zepelin have", "entities": ["Led Zeppelin"]}
+{"id": "mh-04", "heard": "show all tracks by pink floid", "entities": ["Pink Floyd"]}
+{"id": "mh-05", "heard": "how many songs did iron maden record", "entities": ["Iron Maiden"]}
+{"id": "mh-06", "heard": "what is the longest metalica song", "entities": ["Metallica"]}
+{"id": "mh-07", "heard": "how many tracks did ozzie osborne release", "entities": ["Ozzy Osbourne"]}
+{"id": "mh-08", "heard": "how much keso cabrales is in stock", "entities": ["Queso Cabrales"]}
+{"id": "mh-09", "heard": "show sales of mozarella di giovani", "entities": ["Mozzarella di Giovanni"]}
+{"id": "mh-10", "heard": "how many orders came from porto alegri", "entities": ["Porto Alegre"]}
+{"id": "mh-11", "heard": "average freight to floriano polis", "entities": ["Florianopolis"]}
+{"id": "mh-12", "heard": "how many sellers are in ribeiro preto", "entities": ["Ribeirao Preto"]}
+{"id": "mh-13", "heard": "what did jamiroquay sell", "entities": ["Jamiroquai"]}
+{"id": "mh-14", "heard": "compare kaetano veloso and gilberto jil", "entities": ["Caetano Veloso", "Gilberto Gil"]}
+{"id": "mh-15", "heard": "how many sales did alanis morisette get", "entities": ["Alanis Morissette"]}
+{"id": "mh-16", "heard": "how many songs do the red hot chilli peppers have", "entities": ["Red Hot Chili Peppers"]}
+{"id": "mh-17", "heard": "show tracks by credence clearwater revival", "entities": ["Creedence Clearwater Revival"]}
+{"id": "mh-18", "heard": "compare customers in kampinas and goyania", "entities": ["Campinas", "Goiania"]}
+{"id": "mh-19", "heard": "what is the revenue of gorgonzola telleno", "entities": ["Gorgonzola Telino"]}
+{"id": "mh-20", "heard": "how many orders did alfred's futterkiste place", "entities": ["Alfreds Futterkiste"]}
+{"id": "ct-01", "text": "How many orders were placed last month?", "entities": [], "control": true}
+{"id": "ct-02", "text": "What is the average review score?", "entities": [], "control": true}
+{"id": "ct-03", "text": "Show total sales by year.", "entities": [], "control": true}
+{"id": "ct-04", "text": "Which payment type is the most popular?", "entities": [], "control": true}
+{"id": "ct-05", "text": "How many tracks are longer than five minutes?", "entities": [], "control": true}
+{"id": "ct-06", "text": "List the top ten products by revenue.", "entities": [], "control": true}
+{"id": "ct-07", "text": "Now break it down by month.", "entities": [], "control": true}
+{"id": "ct-08", "text": "Same for last year.", "entities": [], "control": true}
+{"id": "ct-09", "text": "Which state has the most customers?", "entities": [], "control": true}
+{"id": "ct-10", "text": "How many orders were delivered late?", "entities": [], "control": true}
+{"id": "ct-11", "text": "What is the average freight value per order?", "entities": [], "control": true}
+{"id": "ct-12", "text": "Show me the top customers.", "entities": [], "control": true}
