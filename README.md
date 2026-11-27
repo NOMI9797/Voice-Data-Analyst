@@ -18,7 +18,7 @@ Talk to your databases. Ask a business question out loud ("which products brough
 - **Voice in, voice out.** Speak a question; the app detects when you stop, transcribes it locally, answers, and speaks a one- or two-sentence explanation of what matters ("Orders peaked in November 2017, about twice the monthly average"), not the table.
 - **Fixes misheard names** (cities, products, artists, categories) against the real values in the database before any SQL is written: "how many customers in Cartiba" → Curitiba.
 - **Understands any database** from a connection string or a file: it profiles tables, columns, values and relationships automatically and sends only the relevant tables to the language model.
-- **Several sources at once** (PostgreSQL, MySQL, SQLite, uploaded CSV). It works out which source holds the answer and writes SQL in that dialect. When a question fits more than one source, it answers from the best match, says which data it used, and offers the others with one tap.
+- **Several sources at once** (PostgreSQL, MySQL, SQLite, uploaded CSV). It works out which source holds the answer and writes SQL in that dialect. When a question fits more than one source equally well, it asks which one by voice, and remembers the choice for the rest of the conversation.
 - **Asks when a question is vague** ("show me the top customers" → "by total spending, or by number of orders?"), then listens for the spoken answer.
 - **Follow-ups edit the previous query:** "now break it down by month", "same for last year", "what about France?".
 - **Repairs itself** when a query fails or the result looks suspicious (no rows, all NULL, negative counts), with a limit of 3 attempts.
@@ -49,7 +49,7 @@ A question goes through these stages (numbers match the diagram):
 1. **Speech-to-text.** The browser records until 1.1 s of silence and sends 16 kHz WAV; faster-whisper transcribes it. If Whisper loops on a few words instead of transcribing, the result is rejected and the user is asked to repeat.
 2. **Domain word correction.** Each 1–4 word span is matched by spelling and sound against ~9,000 values collected by the profiler; confident matches are replaced (1–5 ms).
 3. **Question screen.** Rule-based, instant refusals of data changes, secrets, bulk personal data, system access and prompt injection.
-4. **Schema retrieval and routing.** Hybrid search (embeddings, BM25, value hits) picks the relevant tables and join paths. With several sources, each source's *coverage* of the question decides; when it's unclear, the app answers from the best match, names the source, and offers the others with one tap.
+4. **Schema retrieval and routing.** Hybrid search (embeddings, BM25, value hits) picks the relevant tables and join paths. With several sources, each source's *coverage* of the question decides; when it's a genuine tie, the app asks which database, once per topic. A question that only a switched-off source can answer is reported as such.
 5. **Question → SQL.** Gemini writes one SELECT for the source's dialect, using the retrieved schema, matched values and the last turns (follow-ups). For vague questions it returns a clarifying question instead.
 6. **SQL guard.** The query's syntax tree is checked; anything unparseable is rejected.
 7. **Read-only executor** with per-engine time limits and a row cap. Errors and suspicious results go back to step 5 (self repair, max 3).
@@ -137,4 +137,4 @@ Tests: 255 automated tests (`pytest`).
 | Execution accuracy | 36 questions, 3 databases | 89–97% strict, 94–97% lenient (two runs) |
 | Voice follow-ups | 3 conversations, 9 turns | 9/9 turns correct |
 | Clarification of vague questions | 5 vague questions | 5/5 asked; 0/36 clear questions asked needlessly |
-| Source routing | 48 questions (14 ambiguous) | 0 wrong sources; 12/14 ambiguous flagged; 4/34 clear flagged |
+| Source routing | 48 questions (14 ambiguous) | 0 wrong sources; 12/14 ambiguous asked; 4/34 clear asked |

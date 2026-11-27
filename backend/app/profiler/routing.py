@@ -76,8 +76,12 @@ def resolve_choice(reply: str, options: list[dict]) -> str | None:
     position_words = set().union(*_ORDINALS.values()) | {"last", "latter", "number", "option", "choice"}
     other = [w for w in words if w not in _FILLER and w not in all_name_words and w.rstrip("s") not in all_name_words
              and w not in position_words]
-    if other:  # words that are neither a source name nor a position: a new question
-        return None
+    if other:
+        # words that are neither a source name nor a position: usually a new question, unless
+        # it is a short reply where speech recognition mangled the name ("or list" for "Olist")
+        if len(other) > 2 or words[0] in _QUESTION_START:
+            return None
+        return _sounds_like_option(words, options)
     # by name: distinctive words of one source name ("olist", "music", "northwind" ...)
     scores = []
     for o in options:
@@ -90,7 +94,34 @@ def resolve_choice(reply: str, options: list[dict]) -> str | None:
     if "last" in words or "latter" in words:
         return options[-1]["source_id"]
     hits = {i for i, ws in _ORDINALS.items() if i < len(options) and any(w in ws for w in words)}
-    return options[hits.pop()]["source_id"] if len(hits) == 1 else None
+    if len(hits) == 1:
+        return options[hits.pop()]["source_id"]
+    return _sounds_like_option(words, options)
+
+
+def _sounds_like_option(words: list[str], options: list[dict]) -> str | None:
+    """Speech recognition mangles short brand names: "Olist" comes back as "or list".
+    Compare the reply, with spaces removed, to each option's distinctive name words and
+    pick the option with the most of them matched ("or list e-commerce store": olist and
+    commerce match Olist e-commerce, only store matches Chinook music store)."""
+    from difflib import SequenceMatcher
+
+    spans = {"".join(words[i:i + n]) for n in (1, 2, 3) for i in range(len(words) - n + 1)}
+    scored: list[tuple[int, float, str]] = []
+    for o in options:
+        distinctive = {d for d in set(_words(o["name"])) - _FILLER - set().union(
+            *(set(_words(x["name"])) for x in options if x is not o)) if len(d) >= 4}
+        ratios = [max((SequenceMatcher(None, sp, d).ratio() for sp in spans), default=0.0) for d in distinctive]
+        matched = [r for r in ratios if r >= 0.8]
+        scored.append((len(matched), max(ratios, default=0.0), o["source_id"]))
+    scored.sort(reverse=True)
+    if not scored or scored[0][0] == 0:
+        return None
+    if len(scored) > 1 and scored[0][:2] == scored[1][:2]:
+        return None  # a tie: don't guess
+    if len(scored) > 1 and scored[0][0] == scored[1][0] and scored[0][1] - scored[1][1] < 0.1:
+        return None
+    return scored[0][2]
 
 
 _QUESTION_START = {"how", "what", "which", "who", "whom", "when", "where", "why", "show", "list", "give",

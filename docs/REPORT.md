@@ -31,7 +31,7 @@ Repository: this repository · Architecture diagram: [`docs/architecture.svg`](a
 
 Voice Data Analyst lets a person ask a database a business question out loud and hear the answer. The user speaks ("which products brought in the most revenue last quarter?"); the system transcribes the question locally, fixes misheard names against the database's real values, finds the relevant tables, writes and checks a SQL query, runs it read-only, and answers with a chart, a table, the SQL it ran, and a one- or two-sentence spoken explanation produced by a local text-to-speech model. The user never writes SQL.
 
-The system connects to an unseen database from only a connection string or a file, works across several sources at once (PostgreSQL, MySQL, SQLite and uploaded CSV in our demo), asks the user by voice when a question is vague, answers from the best-matching source (and says which) when a question fits several, edits the previous query for follow-ups such as "now break it down by month", repairs failing or suspicious queries, and never runs a dangerous query.
+The system connects to an unseen database from only a connection string or a file, works across several sources at once (PostgreSQL, MySQL, SQLite and uploaded CSV in our demo), asks the user by voice when a question is vague or could belong to more than one source, edits the previous query for follow-ups such as "now break it down by month", repairs failing or suspicious queries, and never runs a dangerous query.
 
 Headline results (Section 6):
 
@@ -45,7 +45,7 @@ Headline results (Section 6):
 | Execution accuracy (36 questions, 3 databases) | 89–97% strict, 94–97% lenient (two runs) |
 | Voice follow-ups | 9 of 9 turns correct (3 conversations) |
 | Vague questions clarified / clear questions asked needlessly | 5 of 5 / 0 of 36 |
-| Wrong data source picked | 0 of 34 clear questions; 12 of 14 ambiguous ones flagged and answered with the alternatives offered |
+| Wrong data source picked | 0 of 34 clear questions; 12 of 14 ambiguous ones asked about |
 | Automated tests | 255 passing |
 
 ---
@@ -92,7 +92,7 @@ Speech recognition mishears names: "Curitiba" becomes "Kuretiba", "Os Paralamas 
 ### 3.4 Multiple data sources
 
 - **Connecting.** A source is added with a connection string (PostgreSQL, MySQL, SQLite) or by uploading one or more CSV files (loaded into a DuckDB file) or a SQLite file. Each engine is opened read-only: a read-only database user, a read-only session, or read-only file mode. No manual setup is needed; profiling starts automatically.
-- **Choosing the source.** With one active source, there is nothing to choose. With several, each source gets a retrieval score and a **coverage** score: the share of the question's meaningful words that the source can account for (a word counts fully when it names a table, a column, a description word or a real value, allowing for word forms such as delivery/delivered; otherwise its best semantic match counts). Words that describe how to aggregate ("average", "total", "per month") are ignored because every source covers them equally. Then: if only one source covers the question, it is used; if several do, the best is used only when its retrieval score clearly leads; otherwise the question is flagged as fitting several sources. The thresholds were chosen on 48 labelled questions (Section 6.7). The first version then asked "That could be about the Olist e-commerce or Chinook music store data. Which one do you mean?" User testing showed that stopping to ask this for everyday questions was frustrating, so the app now answers from the best match, says so ("Using the Northwind trading data: there are 93 customers"), and offers the other sources as one-tap buttons ("Answer from Olist e-commerce"). Choosing one keeps the follow-up conversation on that source. The UI also offers a scope selector to restrict questions to one source.
+- **Choosing the source.** With one active source, there is nothing to choose. With several, each source gets a retrieval score and a **coverage** score: the share of the question's meaningful words that the source can account for (a word counts fully when it names a table, a column, a description word or a real value, allowing for word forms such as delivery/delivered; otherwise its best semantic match counts). Words that describe how to aggregate ("average", "total", "per month") are ignored because every source covers them equally. Then: if only one source covers the question, it is used; if several do, the best is used only when its retrieval score clearly leads; otherwise the app asks by voice: "That could be about the Olist e-commerce or Chinook music store data. Which one do you mean?" The thresholds were chosen on 48 labelled questions (Section 6.7) so that only genuine ties are asked about. The choice is remembered: a later question that fits the same sources goes straight to the chosen one, so the app asks at most once per topic. The spoken reply is matched by name, position or sound ("or list" is understood as "Olist"). During user testing we briefly answered ties from the best match instead, but reverted because the brief requires asking rather than guessing. If a question names things that only a switched-off source has ("payment type" with Olist off), the app says so and offers to switch it on, instead of trying the active sources. The UI also offers a scope selector to restrict questions to one source.
 - **Dialects.** The SQL writer receives the source's dialect and short dialect tips (date bucketing, string functions, case-insensitive matching), and the guard parses the SQL in that dialect.
 
 ### 3.5 Question to SQL
@@ -111,8 +111,9 @@ Before each repair, any real table that the failing SQL mentions but retrieval h
 
 ### 3.7 Spoken clarification
 
-The system asks instead of guessing when a question is vague. (When a clear question fits several databases, it does not stop to ask: it answers from the best match, says which data it used and offers the others; see Section 3.4.)
+The system asks instead of guessing in two situations:
 
+- **Unclear source** (Section 3.4): only genuine ties, at most once per topic.
 - **Vague question.** When a question leaves out something that changes the answer and has no sensible default, typically a ranking without a measure ("show me the top customers": by money spent, or by number of orders?), the SQL writer returns a short question and two or three options instead of SQL. It does not ask when the measure is obvious, when only the time period or the number of results is missing (it uses all data and ten results), or when the conversation already settles it, and it never asks twice about the same question.
 
 The question is spoken with its options ("How would you like to measure top customers: by total spending, or by number of orders?") because a listener cannot see the buttons. If the user asked by voice, the microphone starts listening as soon as the question finishes playing. The reply is matched to an option by position ("the second one"), by its distinctive words ("by spending"), or passed through as a free answer ("by how much they spent"); a reply that is clearly a new question is treated as one. The answer goes back to the SQL writer with the original question, and the tables it mentions are added to the retrieved schema.
@@ -232,7 +233,7 @@ Correction roughly doubles the share of names that come through correctly, and t
 | Text-to-speech, first sentence | 120 ms | 136 ms |
 | **End of question → first audio** | **4.0 s** (p90 4.2 s) | **6.3 s** (p90 16.6 s) |
 
-In these runs the app still asked "which database?" for questions that fit several sources; those replies started speaking after about 1.9–2.1 s. The app now answers such questions from the best match instead (Section 3.4).
+Clarification replies ("which database?") start speaking after about 1.9–2.1 s, because no SQL is written or run.
 
 **Reading.** The local stages are stable at about 2.0 s, more than half of it the deliberate 1.1 s silence wait. Everything else is the cloud LLM, whose response time varied by an order of magnitude between runs on the free tier. In the two accuracy runs (Section 6.4), SQL generation took a median of 1.1 s and 1.7 s, with a p90 of 11 s and 18 s.
 
@@ -290,13 +291,13 @@ The first version interpreted "same for last year" relative to the latest date i
 
 `eval/routing_eval.py`, 48 labelled questions over three active sources, 14 of them ambiguous on purpose ("how many customers are there"). No LLM calls. The cost of a wrong source (3) was weighted above an unnecessary question (1).
 
-| Method | Wrong source | Ambiguous questions flagged | Clear questions flagged |
+| Method | Wrong source | Ambiguous questions asked about | Clear questions asked about |
 |---|---|---|---|
 | Always pick the top score | 3 of 34 | 0 of 14 | 0 of 34 |
 | Score gap only (best threshold) | 1 of 34 | 10 of 14 | 11 of 34 |
 | **Coverage + score gap (used)** | **0 of 34** | **12 of 14** | **4 of 34** |
 
-The thresholds (coverage 0.05, score margin 0.15) were taken from the middle of the range where results were stable, not the single best point, to avoid fitting 48 questions too closely. A flagged question is answered from the best match with the other sources offered as one-tap alternatives; in the first version it was asked about.
+The thresholds (coverage 0.05, score margin 0.15) were taken from the middle of the range where results were stable, not the single best point, to avoid fitting 48 questions too closely.
 
 ### 6.8 Threats to validity
 
@@ -348,7 +349,7 @@ The real-world gap is a system that works on an **unseen** database from a conne
 |---|---|---|
 | Speech accuracy vs. speed | Whisper `base.en` (0.7 s) instead of `small.en` | A larger model roughly triples transcription time on a CPU. The corrector recovers many misheard names, and `small.en` is one setting away for users with faster hardware. |
 | Asking vs. guessing | Ask only when the answer would change and there is no sensible default; never twice | Asking every time is unusable, and guessing gives confident wrong answers. Measured: 5/5 vague questions asked, 0/36 clear ones. |
-| Source routing: stopping to ask vs. answering | Answer from the best match, name the source, offer the others with one tap | User testing showed that "which database?" on everyday questions was frustrating. Coverage still detects the ambiguous cases (0 wrong picks, 12/14 flagged), so the assumption is said out loud and one tap changes it. |
+| Source routing: asking vs. answering at once | Ask only on genuine ties, remember the choice for the conversation | Asking on every overlap frustrated users in testing; answering from a guess breaks the brief and risks a confident wrong answer. Result: 0 wrong picks, 12/14 ties asked, 4/34 clear questions asked, at most once per topic. |
 | Latency vs. answer quality | LLM wording of the answer, with a 6 s deadline and computed facts | The LLM sounds natural but is sometimes slow; computed facts make its numbers correct, and the deadline keeps the conversation moving. |
 | Free-tier LLM vs. reliability | Fast "lite" model with a fallback chain, one call per question in evaluations | The larger model allowed only 20 free requests a day and was often overloaded. The lite model is about 1 s per call; with billing enabled, a larger model could improve hard queries. |
 | Privacy vs. usefulness | Block listing private people's details; allow counts, groups, and staff/company names | Most business questions need aggregates, not individuals; "which sales rep has the most customers" is a normal internal report. |
@@ -371,7 +372,7 @@ The real-world gap is a system that works on an **unseen** database from a conne
 
 - **Latency** is dominated by the cloud LLM (1–3 s typical, much more under load). A paid tier, a self-hosted model, or streaming the answer wording would reduce it.
 - **Speech recognition of rare names** is the largest accuracy limit: about a third of the names in our spoken test still fail after correction when Whisper garbles them beyond recognition. Options: a larger Whisper model on better hardware, a longer and better-chosen name prompt, or correcting against the speech model's alternative hypotheses.
-- **Routing** flags 4 of 34 clear questions as fitting several sources (they are answered from the best match with the others offered), and cases like "Brazilian states" (which also match a Chinook playlist called "Brazilian Music") remain ambiguous by design. User-written source descriptions ("our Brazilian marketplace data") would help.
+- **Routing** still asks about 4 of 34 clear questions, and cases like "Brazilian states" (which also match a Chinook playlist called "Brazilian Music") remain ambiguous by design. User-written source descriptions ("our Brazilian marketplace data") would help.
 - **Evaluation scale** is small; a larger, independently written question set and a public benchmark subset (Spider, BIRD) would give stronger evidence.
 - **Personal-data detection** relies on column names; content-based detection (for example, finding emails inside free-text columns) would be more robust.
 

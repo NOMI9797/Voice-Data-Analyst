@@ -65,6 +65,11 @@ def _same_sql(a: str, b: str) -> bool:
     return norm(a) == norm(b)
 
 
+def _spoken_choices(names: list[str]) -> str:
+    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
+    return f"That could be about the {listed} data. Which one do you mean?"
+
+
 def _spoken_intent(question: str, options: list[str]) -> str:
     """'How should I rank them?' + options -> 'How should I rank them: by total spending, or by
     number of orders?' A listener can't see the buttons, so the options are said out loud."""
@@ -136,9 +141,13 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
             return done("no_source", f"The {off[0]} data is switched off. Turn it on under Your data to ask it.")
         return done("no_source", "No data source is switched on. Turn one on under Your data first.")
     if r.choices:
-        # Several sources fit about equally. Rather than stop and ask, answer from the best
-        # match, say which data was used, and offer the others as one-tap alternatives.
-        out["other_sources"] = [c for c in r.choices if c["source_id"] != r.source_id]
+        # Several sources fit about equally well: ask by voice rather than guess (the brief:
+        # "ask for clarification instead of guessing"). Only real ties get here, and the
+        # choice is then remembered through the conversation history.
+        out["choices"] = r.choices
+        spoken = _spoken_choices([c["name"] for c in r.choices])
+        out["clarify"] = {"kind": "source", "asked": spoken, "options": r.choices}
+        return done("clarify", spoken)
     if clarification:  # make sure the tables the answer talks about ("money spent") are included
         t = time.perf_counter()
         r = widen(r, clarification["answer"])
@@ -298,6 +307,4 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     out["answer_by_llm"] = by_llm
     if out.get("switched_source"):
         answer = f"That's not in the earlier data, so I looked in {r.source_name}. {answer}"
-    elif out.get("other_sources"):
-        answer = f"Using the {r.source_name} data: {answer}"
     return done("answered", answer)

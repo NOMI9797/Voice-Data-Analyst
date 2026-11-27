@@ -182,15 +182,13 @@ def test_no_switch_when_best_source_is_the_same(env):
 OPTIONS = [{"source_id": "olist", "name": "Olist e-commerce"}, {"source_id": "chinook", "name": "Chinook music store"}]
 
 
-def test_close_call_answers_from_best_match_and_offers_others(env, monkeypatch):
+def test_close_call_asks_which_source_without_llm(env, monkeypatch):
     monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(
-        **{**RETRIEVAL, "source_id": "olist", "source_name": "Olist e-commerce", "choices": OPTIONS}, question=q))
-    env["gen"].append(Generation(sql="select count(*) as customers from customers"))
-    env["db"].append(ok_result(("customers",), ((96096,),)))
+        **{**RETRIEVAL, "choices": OPTIONS}, question=q))
     out = pipeline.ask("how many customers are there")
-    assert out["status"] == "answered" and out["source_id"] == "olist"
-    assert out["other_sources"] == [{"source_id": "chinook", "name": "Chinook music store"}]
-    assert out["answer"].startswith("Using the Olist e-commerce data: ")
+    assert out["status"] == "clarify" and out["clarify"]["kind"] == "source"
+    assert out["answer"] == "That could be about the Olist e-commerce or Chinook music store data. Which one do you mean?"
+    assert env["gen"] == [] and not env["ran"]  # no LLM call, no query
 
 
 def test_reply_to_clarification_answers_original_question(env, monkeypatch):

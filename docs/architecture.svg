@@ -77,7 +77,7 @@
   <text x="316" y="380" class="s">bge-small embeddings + BM25</text>
   <text x="316" y="395" class="s">+ value hits → relevant tables</text>
   <text x="316" y="410" class="s">routing: coverage per source;</text>
-  <text x="316" y="425" class="s">unclear → best match + others</text>
+  <text x="316" y="425" class="s">tie → asks "which database?"</text>
 
   <rect x="304" y="450" width="196" height="76" rx="8" class="box"/>
   <text x="316" y="470" class="num">5</text><text x="330" y="470" class="h">Question → SQL</text>

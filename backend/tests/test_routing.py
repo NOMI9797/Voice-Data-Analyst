@@ -95,3 +95,15 @@ INTENT = ["by total spending", "by number of orders"]
 ])
 def test_resolve_intent_reply(reply, expect):
     assert resolve_intent_reply(reply, INTENT) == expect
+
+
+@pytest.mark.parametrize("reply,expect", [
+    ("or list e-commerce store", "o"),   # Whisper's version of "Olist e-commerce store"
+    ("oh list", "o"),
+    ("north wind", "n"),
+    ("chin hook", "c"),
+    ("which music genre sells best", None),
+    ("the weather today", None),
+])
+def test_resolve_choice_sound_alike(reply, expect):
+    assert resolve_choice(reply, OPTS) == expect
