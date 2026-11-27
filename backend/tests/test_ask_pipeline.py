@@ -352,3 +352,12 @@ def test_pure_follow_up_does_not_jump_to_another_source(env):
     env["gen"].append(Generation(sql=None, message="Tracks have no dates, so they can't be broken down by month."))
     out = pipeline.ask("now break it down by month", [Turn("tracks per genre", "select ...", "src1")])
     assert out["status"] == "cannot_answer" and "dates" in out["answer"] and env["gen"] == []
+
+
+def test_switched_off_source_is_not_used(env, monkeypatch):
+    monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(source_id=None, choices=[]))
+    monkeypatch.setattr(pipeline, "get_registry", lambda: SimpleNamespace(
+        list=lambda: [SimpleNamespace(id="olist", name="Olist e-commerce", active=False)]))
+    out = pipeline.ask("how many customers are there", source_ids=["olist"])
+    assert out["status"] == "no_source"
+    assert out["answer"] == "The Olist e-commerce data is switched off. Turn it on under Your data to ask it."

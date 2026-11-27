@@ -32,6 +32,8 @@ async def run_sql(body: SQLIn) -> dict:
         source = get_registry().get(body.source_id)
     except SourceError as exc:
         raise HTTPException(404, str(exc)) from exc
+    if not source.active:
+        raise HTTPException(409, f"The {source.name} data is switched off. Turn it on under Your data to query it.")
     guard = check_sql(body.sql, source.dialect, allowed_tables(body.source_id),
                       row_limit=get_settings().query_row_limit)
     if not guard.ok:

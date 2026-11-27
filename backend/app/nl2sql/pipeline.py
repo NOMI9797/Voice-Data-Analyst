@@ -27,6 +27,7 @@ from app.profiler.store import get_store
 from app.safety.executor import QueryError, run_query
 from app.safety.guard import check_sql
 from app.safety.intent import screen_question
+from app.sources.registry import get_registry
 from app.viz.chart import choose_chart
 
 log = logging.getLogger(__name__)
@@ -130,7 +131,10 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     clock.lap("retrieval", t)
     out["retrieval"] = asdict(r)
     if not r.source_id:
-        return done("no_source", "No data source is active. Turn one on in the sources panel first.")
+        off = [s.name for s in get_registry().list() if source_ids and s.id in source_ids and not s.active]
+        if off:
+            return done("no_source", f"The {off[0]} data is switched off. Turn it on under Your data to ask it.")
+        return done("no_source", "No data source is switched on. Turn one on under Your data first.")
     if r.choices:
         # Several sources fit about equally. Rather than stop and ask, answer from the best
         # match, say which data was used, and offer the others as one-tap alternatives.

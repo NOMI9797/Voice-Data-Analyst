@@ -339,7 +339,9 @@ def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: 
     if context:
         question = f"{context} {question}"
     reg = get_registry()
-    ids = source_ids or [s.id for s in reg.active()]
+    active = [s.id for s in reg.active()]
+    # a switched-off source is never used, even when a question names it explicitly
+    ids = [i for i in source_ids if i in active] if source_ids else active
     indexes = [i for i in (get_index(sid) for sid in ids) if i is not None]
     if not indexes:
         return Retrieval(asked, None, None, None, [], [], False, [], "", 0.0)
