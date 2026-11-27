@@ -216,6 +216,18 @@ export default function TurnView({ turn, isLatest, phase, userSpeaking, pending,
                 </div>
               )}
 
+              {r.other_sources && r.other_sources.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-slate-500">Meant other data?</span>
+                  {r.other_sources.map((o) => (
+                    <button key={o.source_id} onClick={() => onPickSource(r.question, o.source_id)}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 hover:border-indigo-300 hover:bg-indigo-50">
+                      Answer from {o.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {(r.assumption || (r.attempts.length > 0 && r.status === "answered")) && (
                 <div className="mt-2 space-y-0.5 text-xs text-slate-500">
                   {r.assumption && <p>Assumed: {r.assumption}</p>}

@@ -8,6 +8,7 @@ Runs fully offline after the first model download (cached in /models/whisper).
 from __future__ import annotations
 
 import io
+import re
 import os
 import logging
 import threading
@@ -65,6 +66,18 @@ def _decode(audio: bytes) -> np.ndarray | bytes:
     return audio
 
 
+def looks_looped(text: str, compression_ratios: list[float]) -> bool:
+    """Whisper sometimes loops on a few words instead of transcribing ("bage, tupa, bage,
+    tupa, bage ..."), on noise or when prompted with a word list. Signs: Whisper's own
+    compression ratio is high (its standard check uses 2.4), or the text reuses very few
+    different words: a loop has under half distinct words, while a real question, even
+    "how many orders, how many customers, how many sellers", has more."""
+    if any(r > 2.4 for r in compression_ratios):
+        return True
+    words = re.findall(r"[a-z0-9']+", text.lower())
+    return len(words) >= 6 and len(set(words)) / len(words) < 0.5
+
+
 def transcribe(audio: bytes, hint: str = "") -> dict:
     t0 = time.perf_counter()
     model = _get_model()
@@ -89,5 +102,6 @@ def transcribe(audio: bytes, hint: str = "") -> dict:
         "duration_s": round(info.duration, 2),
         "avg_logprob": None if avg_logprob is None else round(avg_logprob, 3),
         "no_speech": bool(segs) and all(s.no_speech_prob > 0.6 for s in segs),
+        "looped": looks_looped(text, [s.compression_ratio for s in segs]),
         "ms": round((time.perf_counter() - t0) * 1000, 1),
     }

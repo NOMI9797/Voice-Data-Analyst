@@ -58,7 +58,6 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
   const [sources, setSources] = useState<Source[]>([]);
   const [scope, setScope] = useState("auto");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [sttHint, setSttHint] = useState("");
   const [sqlRunning, setSqlRunning] = useState(false);
   const speaker = useSpeaker();
   const endRef = useRef<HTMLDivElement>(null);
@@ -66,7 +65,6 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
   useEffect(() => {
     api.listSources().then(setSources).catch(() => {});
     api.suggestions().then(setSuggestions).catch(() => {});
-    api.sttHint().then((h) => setSttHint(h.hint)).catch(() => {}); // database names help Whisper hear them
   }, [sourcesVersion]);
   const active = sources.filter((s) => s.active);
   useEffect(() => {
@@ -145,9 +143,10 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
       setWork("transcribing");
       try {
         const t0 = performance.now();
-        const tr = await api.stt(rec.wav, sttHint);
+        // No name list as a prompt: on real microphones it made Whisper loop on those names.
+        const tr = await api.stt(rec.wav);
         recorder.done();
-        if (!tr.text || tr.no_speech) {
+        if (!tr.text || tr.no_speech || tr.looped) {
           setWork("idle");
           setNotice("I couldn't make out any words. Please try again.");
           return;

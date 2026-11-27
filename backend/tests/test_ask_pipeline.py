@@ -158,7 +158,8 @@ def test_follow_up_switches_source_when_sticky_source_cannot_answer(env, monkeyp
     def fake_retrieve(q, ids=None, **kw):
         calls.append(kw)
         sid = "src1" if kw.get("prefer_source") else "src2"
-        return SimpleNamespace(**{**RETRIEVAL, "source_id": sid, "source_name": sid}, question=q)
+        scores = [{"source_id": sid, "term_coverage": {"review": 1.0}}]
+        return SimpleNamespace(**{**RETRIEVAL, "source_id": sid, "source_name": sid, "source_scores": scores}, question=q)
 
     monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
     env["gen"] += [Generation(sql=None, message="no reviews here"),
@@ -180,13 +181,15 @@ def test_no_switch_when_best_source_is_the_same(env):
 OPTIONS = [{"source_id": "olist", "name": "Olist e-commerce"}, {"source_id": "chinook", "name": "Chinook music store"}]
 
 
-def test_close_call_asks_without_llm(env, monkeypatch):
+def test_close_call_answers_from_best_match_and_offers_others(env, monkeypatch):
     monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(
-        **{**RETRIEVAL, "choices": OPTIONS}, question=q))
+        **{**RETRIEVAL, "source_id": "olist", "source_name": "Olist e-commerce", "choices": OPTIONS}, question=q))
+    env["gen"].append(Generation(sql="select count(*) as customers from customers"))
+    env["db"].append(ok_result(("customers",), ((96096,),)))
     out = pipeline.ask("how many customers are there")
-    assert out["status"] == "clarify" and out["choices"] == OPTIONS
-    assert out["answer"] == "That could be about the Olist e-commerce or Chinook music store data. Which one do you mean?"
-    assert env["gen"] == [] and not env["ran"]  # no LLM call, no query
+    assert out["status"] == "answered" and out["source_id"] == "olist"
+    assert out["other_sources"] == [{"source_id": "chinook", "name": "Chinook music store"}]
+    assert out["answer"].startswith("Using the Olist e-commerce data: ")
 
 
 def test_reply_to_clarification_answers_original_question(env, monkeypatch):
@@ -341,3 +344,11 @@ def test_repair_gets_schema_of_tables_the_sql_used(env, monkeypatch):
     out = pipeline.ask("which products sell best")
     assert out["status"] == "answered" and added["names"] == ["Products"]
     assert "ProductName" in seen["schema"] and "exact column names" in seen["error"]
+
+
+
+def test_pure_follow_up_does_not_jump_to_another_source(env):
+    from app.nl2sql.generator import Turn
+    env["gen"].append(Generation(sql=None, message="Tracks have no dates, so they can't be broken down by month."))
+    out = pipeline.ask("now break it down by month", [Turn("tracks per genre", "select ...", "src1")])
+    assert out["status"] == "cannot_answer" and "dates" in out["answer"] and env["gen"] == []

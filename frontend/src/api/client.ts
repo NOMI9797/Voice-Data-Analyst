@@ -54,6 +54,7 @@ export type Transcript = {
   duration_s: number;
   avg_logprob: number | null;
   no_speech: boolean;
+  looped?: boolean; // Whisper repeated itself instead of transcribing
   ms: number;
 };
 
@@ -112,6 +113,7 @@ export type AskResponse = {
   source_id?: string;
   source_name?: string;
   choices?: SourceChoice[];
+  other_sources?: SourceChoice[]; // also fit the question; answered from the best match
   clarify?: Clarify;
   clarification?: { asked: string; answer: string };
   chosen_source?: string;

@@ -58,12 +58,6 @@ class _Clock:
         return round((time.perf_counter() - self._t0) * 1000, 1)
 
 
-def _spoken_choices(names: list[str]) -> str:
-    names = [f"{n}" for n in names]
-    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
-    return f"That could be about the {listed} data. Which one do you mean?"
-
-
 def _same_sql(a: str, b: str) -> bool:
     # whitespace only: case matters inside quoted values ('Delivered' vs 'delivered')
     norm = lambda q: re.sub(r"\s+", " ", q.strip().rstrip(";"))  # noqa: E731
@@ -138,10 +132,9 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     if not r.source_id:
         return done("no_source", "No data source is active. Turn one on in the sources panel first.")
     if r.choices:
-        out["choices"] = r.choices
-        spoken = _spoken_choices([c["name"] for c in r.choices])
-        out["clarify"] = {"kind": "source", "asked": spoken, "options": r.choices}
-        return done("clarify", spoken)
+        # Several sources fit about equally. Rather than stop and ask, answer from the best
+        # match, say which data was used, and offer the others as one-tap alternatives.
+        out["other_sources"] = [c for c in r.choices if c["source_id"] != r.source_id]
     if clarification:  # make sure the tables the answer talks about ("money spent") are included
         t = time.perf_counter()
         r = widen(r, clarification["answer"])
@@ -169,14 +162,17 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         out["clarify"] = {"kind": "intent", "asked": spoken, "options": gen.clarify_options,
                           "source_id": r.source_id}
         return done("clarify", spoken)
-    if not gen.sql and not gen.clarify_question and prev and r.source_id == prev.source_id:
+    # a pure follow-up ("now break it down by month") has no subject words of its own: if the
+    # conversation's source can't do it, say so rather than answer something else elsewhere
+    has_subject = any(sc.get("term_coverage") for sc in (r.source_scores or []))
+    if not gen.sql and not gen.clarify_question and prev and r.source_id == prev.source_id and has_subject:
         # We stayed on the previous question's source, but it can't answer this one.
         # Maybe the user changed topic: retry once on the source that fits the
         # question by itself.
         t = time.perf_counter()
         alt = retrieve(question, source_ids)
         clock.lap("retrieval", t)
-        if alt.source_id and not alt.choices and alt.source_id != r.source_id \
+        if alt.source_id and alt.source_id != r.source_id \
                 and (alt_tables := allowed_tables(alt.source_id)):
             t = time.perf_counter()
             try:
@@ -289,4 +285,6 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     out["answer_by_llm"] = by_llm
     if out.get("switched_source"):
         answer = f"That's not in the earlier data, so I looked in {r.source_name}. {answer}"
+    elif out.get("other_sources"):
+        answer = f"Using the {r.source_name} data: {answer}"
     return done("answered", answer)

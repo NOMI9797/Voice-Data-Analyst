@@ -48,7 +48,9 @@ i we you our my their there please can could would should get find""".split())
 _ANALYTIC = set("""average avg mean total sum count number amount best worst highest lowest largest smallest
 biggest longest shortest common often usually share percent percentage rate ratio trend compare compared
 there have has had our us value time times duration period month months monthly year years yearly
-day days daily week weeks weekly quarter quarters hour hours minute minutes""".split())
+day days daily week weeks weekly quarter quarters hour hours minute minutes
+now break broken breakdown down split group grouped same again instead also then compare show display
+give list sort sorted only just about okay ok let let's look see tell want need could would""".split())
 
 
 _vocab_cache: dict[int, set[str]] = {}
@@ -325,6 +327,7 @@ def _connect(selected: list[str], graph: dict[str, set[str]]) -> list[str]:
 # a follow-up stays on the previous question's source unless another source
 # scores clearly higher (follow-ups like "and in 2018?" carry almost no signal)
 STICKY_MARGIN = 0.08
+STICKY_COVERAGE = 0.1
 
 
 def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: str | None = None,
@@ -401,7 +404,12 @@ def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: 
     pos = {s["source_id"]: i for i, s in enumerate(source_scores)}
     choices: list[dict] = []
     pref = next((i for i in order if source_scores[i]["source_id"] == prefer_source), None)
-    if pref is not None and source_scores[best]["score"] - source_scores[pref]["score"] <= STICKY_MARGIN:
+    best_cov = max(sc.get("coverage", 0) for sc in source_scores)
+    # stay on the conversation's source only if it can account for the new question too:
+    # "now break it down by month" has no subject words, so every source covers it equally,
+    # but "how many orders were delivered late" names things a music store doesn't have
+    if pref is not None and source_scores[best]["score"] - source_scores[pref]["score"] <= STICKY_MARGIN \
+            and source_scores[pref].get("coverage", 0) >= best_cov - STICKY_COVERAGE:
         best, reason = pref, "follow-up: stayed on the previous question's source"
     else:
         d = decide(source_scores)

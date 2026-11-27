@@ -60,7 +60,7 @@
   <rect x="304" y="108" width="196" height="62" rx="8" class="box local"/>
   <text x="316" y="128" class="num">1</text><text x="330" y="128" class="h">Speech-to-text</text>
   <text x="316" y="146" class="s">faster-whisper base.en (CPU, int8)</text>
-  <text x="316" y="161" class="s">prompted with database names</text>
+  <text x="316" y="161" class="s">looped transcripts rejected</text>
 
   <rect x="304" y="186" width="196" height="62" rx="8" class="box local"/>
   <text x="316" y="206" class="num">2</text><text x="330" y="206" class="h">Domain word correction</text>
@@ -77,7 +77,7 @@
   <text x="316" y="380" class="s">bge-small embeddings + BM25</text>
   <text x="316" y="395" class="s">+ value hits → relevant tables</text>
   <text x="316" y="410" class="s">routing: coverage per source;</text>
-  <text x="316" y="425" class="s">unclear → "which database?"</text>
+  <text x="316" y="425" class="s">unclear → best match + others</text>
 
   <rect x="304" y="450" width="196" height="76" rx="8" class="box"/>
   <text x="316" y="470" class="num">5</text><text x="330" y="470" class="h">Question → SQL</text>
@@ -151,7 +151,7 @@
   <text x="752" y="308" class="s">→ retrieval index (embeddings)</text>
   <text x="752" y="323" class="s">→ correction vocabulary</text>
   <text x="752" y="338" class="s">→ allowed tables for the guard</text>
-  <text x="752" y="353" class="s">→ Whisper name hint</text>
+  <text x="752" y="353" class="s">→ starter questions</text>
   <path d="M833 248 L833 266" class="ln"/>
   <path d="M740 320 L500 390" class="ln"/>
   <path d="M740 300 L500 220" class="ln"/>

@@ -62,3 +62,16 @@ def test_entities_and_locations_reported():
 def test_words_next_to_a_name_are_kept(text):
     r = correct(text, VOCAB)
     assert r.corrected.rstrip("?").split()[-1] == "have"
+
+
+@pytest.mark.parametrize("text,looped", [
+    ("santana, piau, maua santana, piau, maua santana.", True),
+    ("bage, tupa, bage, tupa, bage, tupa, bage", True),
+    ("the the the the the the", True),
+    ("How many orders were placed last month?", False),
+    ("Compare orders in 2017 and 2018 for Sao Paulo and Rio", False),
+    ("How many orders, how many customers, how many sellers?", False),
+])
+def test_whisper_loop_detection(text, looped):
+    from app.stt.whisper import looks_looped
+    assert looks_looped(text, []) is looped
