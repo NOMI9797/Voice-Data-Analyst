@@ -5,9 +5,8 @@
 
 | Name | Registration number |
 |------|---------------------|
-|      |                     |
-|      |                     |
-|      |                     |
+| Noman Ahmed | 22i-2563 |
+| Zain Abbas | 21i-1109 |
 
 Repository: this repository · Architecture diagram: [`docs/architecture.svg`](architecture.svg) · Setup: [`README.md`](../README.md)
 
@@ -60,7 +59,7 @@ The system has three parts:
 - **Backend (Python, FastAPI, in Docker).** Everything else runs here, locally: speech-to-text, word correction, profiling, retrieval, routing, the SQL guard, the read-only executor, chart choice, key facts and text-to-speech.
 - **Cloud LLM (Google Gemini).** The only external service. It writes and repairs SQL, words the spoken answer, and writes plain-English descriptions of tables during profiling. It receives text only (Section 5.4).
 
-A question flows through ten stages, numbered as in the diagram: (1) speech-to-text, (2) domain word correction, (3) question screen, (4) schema retrieval and source routing, (5) question to SQL, (6) SQL guard, (7) read-only executor with self repair, (8) chart and key facts, (9) spoken answer wording, (10) text-to-speech. Separately, every newly connected source is profiled once in the background, and that profile feeds stages 1, 2, 4 and 6.
+A question flows through ten stages, numbered as in the diagram: (1) speech-to-text, (2) domain word correction, (3) question screen, (4) schema retrieval and source routing, (5) question to SQL, (6) SQL guard, (7) read-only executor with self repair, (8) chart and key facts, (9) spoken answer wording, (10) text-to-speech. Separately, every newly connected source is profiled once in the background, and that profile feeds stages 2, 4 and 6 and the starter questions shown in an empty conversation.
 
 ---
 

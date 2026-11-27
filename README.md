@@ -9,9 +9,8 @@ Talk to your databases. Ask a business question out loud ("which products brough
 
 | Name | Registration number |
 |------|---------------------|
-|      |                     |
-|      |                     |
-|      |                     |
+| Noman Ahmed | 22i-2563 |
+| Zain Abbas | 21i-1109 |
 
 ## What it does
 
@@ -57,7 +56,7 @@ A question goes through these stages (numbers match the diagram):
 9. **Spoken answer.** Gemini words the facts in one or two sentences (6 s deadline, otherwise a template sentence).
 10. **Text-to-speech.** Piper speaks sentence 1 while the rest is synthesized; clicking the mic interrupts it to ask something else.
 
-Each new source is profiled once in the background (tables, columns, samples, value lists, declared and inferred relationships, LLM descriptions). The profile feeds the retrieval index, the correction vocabulary, the guard's allowed tables and the speech-to-text hint.
+Each new source is profiled once in the background (tables, columns, samples, value lists, declared and inferred relationships, LLM descriptions). The profile feeds the retrieval index, the correction vocabulary, the guard's allowed tables and the starter questions.
 
 ## Setup
 
