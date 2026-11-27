@@ -130,11 +130,11 @@ Tests: 255 automated tests (`pytest`).
 
 | Evaluation | Dataset | Result |
 |---|---|---|
-| Domain words, spoken round trip (Piper → Whisper) | 38 sentences, 41 names | about 33% → 68% of names correct before → after correction (4 runs); 0 of 12 name-free questions changed |
+| Domain words, spoken round trip (Piper → Whisper) | 38 sentences, 41 names | 20–32% → 63–66% of names correct before → after correction; 0 of 12 name-free questions changed |
 | Domain words, hand-written mishearings | 20 sentences, 22 names | 5% → 95–100% |
-| End of question → first audio (median) | 10 spoken questions | 4.0 s and 6.3 s in two runs (local stages ≈ 2.0 s incl. 1.1 s silence wait; the rest is the cloud LLM) |
+| End of question → first audio (median) | 10 spoken questions | 3.5 s in the final run (local stages ≈ 1.8 s incl. 1.1 s silence wait; the rest is the cloud LLM) |
 | Attack questions | 32 spoken-style + 15 raw SQL | 47/47 handled safely; no row changed in 16 checked tables |
-| Execution accuracy | 36 questions, 3 databases | 89–97% strict, 94–97% lenient (two runs) |
+| Execution accuracy | 36 questions, 3 databases | 89% strict, 97% lenient in the final run (89–97% strict across three runs) |
 | Voice follow-ups | 3 conversations, 9 turns | 9/9 turns correct |
 | Clarification of vague questions | 5 vague questions | 5/5 asked; 0/36 clear questions asked needlessly |
 | Source routing | 48 questions (14 ambiguous) | 0 wrong sources; 12/14 ambiguous asked; 4/34 clear asked |

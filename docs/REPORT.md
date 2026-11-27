@@ -37,12 +37,12 @@ Headline results (Section 6):
 
 | Measure | Result |
 |---|---|
-| Domain names correct, real speech-recognition errors | about 33% before correction → about 68% after (average of 4 runs, 41 names each) |
+| Domain names correct, real speech-recognition errors | 20–32% before correction → 63–66% after, with the final settings (3 runs, 41 names each) |
 | Domain names correct, hand-written mishearings | 5% → 95–100% |
 | Questions without names changed by the corrector | 0 of 12 (every run) |
-| End of question → first spoken audio, answered questions | median 4.0 s and 6.3 s in two runs; local stages ≈ 2.0 s, the rest is the cloud LLM |
+| End of question → first spoken audio, answered questions | median **3.5 s** in the final run (4.0 s and 6.3 s earlier); local stages ≈ 1.8 s, the rest is the cloud LLM |
 | Attack questions handled safely | 47 of 47 (32 spoken-style, 15 raw SQL); no database row changed |
-| Execution accuracy (36 questions, 3 databases) | 89–97% strict, 94–97% lenient (two runs) |
+| Execution accuracy (36 questions, 3 databases) | final run: **89% strict, 97% lenient**; 89–97% strict across three runs |
 | Voice follow-ups | 9 of 9 turns correct (3 conversations) |
 | Vague questions clarified / clear questions asked needlessly | 5 of 5 / 0 of 36 |
 | Wrong data source picked | 0 of 34 clear questions; 12 of 14 ambiguous ones asked about |
@@ -207,6 +207,7 @@ A name counts as correct when it appears in the text, ignoring case, accents and
 | | no name prompt, run 2 | 32% | 66% |
 | | **with name prompt**, run 1 | 32% | **73%** |
 | | **with name prompt**, run 2 | 37% | **68%** |
+| | **final code** (no name prompt), final run | 20% | **66%** |
 | Hand-written mishearings (22 names) | all runs | 5% | **95–100%** |
 | Controls without names (12) | all runs | – | **0 changed** |
 
@@ -218,24 +219,24 @@ Correction roughly doubles the share of names that come through correctly, and t
 
 **Method.** Ten spoken questions (Piper audio) go through every stage the app runs, with all three sources active and the spoken answer on: the browser's end-of-speech wait (a fixed 1.1 s), upload and speech-to-text, word correction, the server pipeline, and synthesis of the first sentence. Four of the ten were genuinely ambiguous between sources and correctly got a "which database?" reply; they are reported separately.
 
-**Results** (median, answered questions; two runs on different days of Gemini load):
+**Results** (median, answered questions; three runs under different Gemini load; the final run used the final code):
 
-| Stage | Run 1 | Run 2 |
+| Stage | Run 1 | Run 2 | Final run |
 |---|---|---|
-| Silence wait (browser, fixed) | 1,100 ms | 1,100 ms |
-| Upload + speech-to-text (Whisper) | 749 ms | 715 ms |
-| Word correction | 6 ms | 4 ms |
-| Retrieval and routing | 23 ms | 19 ms |
-| SQL generation (LLM) | 1,085 ms | 2,718 ms |
-| Safety guard | 3 ms | 4 ms |
-| Query | 5 ms | 15 ms |
-| Spoken answer wording (LLM) | 679 ms | 1,055 ms |
-| Text-to-speech, first sentence | 120 ms | 136 ms |
-| **End of question → first audio** | **4.0 s** (p90 4.2 s) | **6.3 s** (p90 16.6 s) |
+| Silence wait (browser, fixed) | 1,100 ms | 1,100 ms | 1,100 ms |
+| Upload + speech-to-text (Whisper) | 749 ms | 715 ms | 588 ms |
+| Word correction | 6 ms | 4 ms | 5 ms |
+| Retrieval and routing | 23 ms | 19 ms | 12 ms |
+| SQL generation (LLM) | 1,085 ms | 2,718 ms | 957 ms |
+| Safety guard | 3 ms | 4 ms | 4 ms |
+| Query | 5 ms | 15 ms | 13 ms |
+| Spoken answer wording (LLM) | 679 ms | 1,055 ms | 629 ms |
+| Text-to-speech, first sentence | 120 ms | 136 ms | 110 ms |
+| **End of question → first audio** | **4.0 s** (p90 4.2 s) | **6.3 s** (p90 16.6 s) | **3.5 s** (p90 4.3 s) |
 
-Clarification replies ("which database?") start speaking after about 1.9–2.1 s, because no SQL is written or run.
+Clarification replies ("which database?") start speaking after about 1.8–2.1 s, because no SQL is written or run.
 
-**Reading.** The local stages are stable at about 2.0 s, more than half of it the deliberate 1.1 s silence wait. Everything else is the cloud LLM, whose response time varied by an order of magnitude between runs on the free tier. In the two accuracy runs (Section 6.4), SQL generation took a median of 1.1 s and 1.7 s, with a p90 of 11 s and 18 s.
+**Reading.** The local stages are stable at about 1.8–2.0 s, more than half of it the deliberate 1.1 s silence wait. Everything else is the cloud LLM, whose response time varied by an order of magnitude between runs on the free tier. In the two accuracy runs (Section 6.4), SQL generation took a median of 1.1 s and 1.7 s, with a p90 of 11 s and 18 s.
 
 ### 6.3 Attack questions
 
@@ -262,13 +263,16 @@ The first run found a real gap: for "show the full name and email of each custom
 
 **Method.** `eval/run_eval.py`, 36 questions over the three databases (10 easy, 18 medium, 8 hard), each with a hand-written reference ("gold") query. As in the Spider and BIRD benchmarks, we compare *results*, not SQL text: column names, extra columns, row order and rounding to two decimals are ignored, but every gold column must map to a predicted column so that whole rows match. A *lenient* score also accepts a ranked list whose first row is a one-row gold answer ("which payment type is used most often" answered with the full ranking). Questions are asked with the source fixed, so routing is measured separately (Section 6.7). The dataset is validated first: every gold query runs, and no "top N" answer has a tie at the cut-off.
 
-| | Run 1 | Run 2 |
-|---|---|---|
-| All 36 questions, strict | **35 (97%)** | **32 (89%)** |
-| All 36 questions, lenient | 35 (97%) | 34 (94%) |
-| Easy / medium / hard, strict | 10/10, 17/18, 8/8 | 10/10, 15/18, 7/8 |
+| | Run 1 | Run 2 | Final run (final code) |
+|---|---|---|---|
+| All 36 questions, strict | **35 (97%)** | **32 (89%)** | **32 (89%)** |
+| All 36 questions, lenient | 35 (97%) | 34 (94%) | **35 (97%)** |
+| Easy / medium / hard, strict | 10/10, 17/18, 8/8 | 10/10, 15/18, 7/8 | 10/10, 14/18, 8/8 |
+| Questions needing a repair | 0 | 0 | 1 (repaired correctly) |
 
 Of the four strict misses in run 2, two returned the full ranking instead of the single top row (correct when spoken), and one is a defensible interpretation: "orders delivered after the estimated date" was answered for orders with status "delivered" only. The fourth was a real failure: retrieval had left out the `Products` table, the LLM guessed its column names, and three repairs did not help. That led to the schema-widening repair described in Section 3.6; the question then succeeded in three of three attempts.
+
+In the final run, three of the four strict misses returned the full ranking with the correct answer first ("which payment type / artist / media type is used most"), which is correct when spoken, and the fourth is the "delivered" interpretation above. There were no real failures; the one query that failed was repaired correctly. Follow-ups (9/9 turns), clarification (5/5) and safety (7/7) were unchanged.
 
 ### 6.5 Voice follow-ups
 
