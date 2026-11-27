@@ -121,7 +121,10 @@ export type AskResponse = {
 
 export type Turn = { question: string; sql: string; source_id: string };
 
+export type Suggestion = { source_id: string; source_name: string; question: string };
+
 export const api = {
+  suggestions: () => request<Suggestion[]>("/suggestions"),
   sttHint: () => request<{ hint: string }>("/correct/hint"),
   ask: (question: string, history: Turn[] = [], opts: { source_ids?: string[]; pending?: Pending | null } = {}) =>
     request<AskResponse>("/ask", {

@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from app.profiler.retriever import retrieve
 from app.profiler.store import get_store
+from app.profiler.suggest import suggestions_for
 from app.sources.registry import SourceError, get_registry
 
 router = APIRouter(tags=["schema"])
@@ -51,3 +52,14 @@ async def retrieve_schema(body: RetrieveIn) -> dict:
         raise HTTPException(400, "Empty question")
     r = await run_in_threadpool(retrieve, body.question, body.source_ids)
     return asdict(r)
+
+
+@router.get("/suggestions")
+def suggestions() -> list[dict]:
+    """Starter questions for an empty conversation, from the profiles of the active sources."""
+    store, out = get_store(), []
+    for src in get_registry().active():
+        prof = store.get(src.id)
+        if prof:
+            out += [{"source_id": src.id, "source_name": src.name, "question": q} for q in suggestions_for(prof)]
+    return out

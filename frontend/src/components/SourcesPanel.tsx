@@ -83,8 +83,9 @@ function SourceCard({
   );
 }
 
-export default function SourcesPanel() {
+export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
   const [sources, setSources] = useState<Source[]>([]);
+  const signature = useRef("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,13 +96,20 @@ export default function SourcesPanel() {
 
   const refresh = useCallback(async () => {
     try {
-      setSources(await api.listSources());
+      const list = await api.listSources();
+      setSources(list);
+      // tell the conversation when sources were added, removed, toggled or finished profiling
+      const sig = list.map((s) => `${s.id}:${s.active}:${s.profile_status}`).join("|");
+      if (sig !== signature.current) {
+        signature.current = sig;
+        onChange?.();
+      }
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     refresh();
@@ -147,10 +155,10 @@ export default function SourcesPanel() {
   const activeCount = sources.filter((s) => s.active).length;
 
   return (
-    <aside className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold">Data sources</h2>
-        <span className="text-xs text-slate-500">{activeCount} active</span>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Your data</h2>
+        <span className="text-xs text-slate-500">{activeCount} of {sources.length} in use</span>
       </div>
 
       {loading ? (
@@ -174,7 +182,13 @@ export default function SourcesPanel() {
 
       {error && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
 
-      <form onSubmit={connect} className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3">
+      <details className="group rounded-lg border border-slate-200 bg-slate-50/60 open:bg-white" open={sources.length === 0}>
+        <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium text-slate-700">
+          Add a data source
+          <span className="text-slate-400 transition group-open:rotate-45">+</span>
+        </summary>
+        <div className="flex flex-col gap-3 px-3 pb-3">
+      <form onSubmit={connect} className="flex flex-col gap-2">
         <span className="text-sm font-medium">Connect a database</span>
         <input
           value={url}
@@ -226,6 +240,8 @@ export default function SourcesPanel() {
           onChange={(e) => upload(e.target.files)}
         />
       </div>
-    </aside>
+        </div>
+      </details>
+    </div>
   );
 }
