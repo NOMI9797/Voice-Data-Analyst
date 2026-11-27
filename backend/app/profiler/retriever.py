@@ -580,3 +580,28 @@ def tables_named_in(sql: str, source_id: str) -> list[str]:
         if short in words or (len(short) > 5 and short in flat):
             out.append(t.name)
     return out
+
+
+def switched_off_fit(question: str) -> dict | None:
+    """Does the question name things that only a SWITCHED-OFF source has? ("payment type",
+    "sellers" when only the music store and the trading data are on.) Returns that source
+    and the words, or None. Used to explain a "can't answer" instead of guessing elsewhere."""
+    terms = _content_terms(question)
+    if not terms:
+        return None
+    reg = get_registry()
+    active = {s.id for s in reg.active()}
+    active_vocab = [ _vocabulary(i) for i in (get_index(sid) for sid in active) if i is not None]
+    best, best_words = None, []
+    for s in reg.list():
+        if s.id in active:
+            continue
+        idx = get_index(s.id)
+        if idx is None:
+            continue
+        vocab = _vocabulary(idx)
+        only_here = [w for w in terms if _in_vocabulary(w, vocab)
+                     and not any(_in_vocabulary(w, v) for v in active_vocab)]
+        if len(only_here) > len(best_words):
+            best, best_words = s, only_here
+    return {"source_id": best.id, "name": best.name, "words": best_words} if best else None

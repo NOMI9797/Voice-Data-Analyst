@@ -114,6 +114,7 @@ export type AskResponse = {
   source_name?: string;
   choices?: SourceChoice[];
   other_sources?: SourceChoice[]; // also fit the question; answered from the best match
+  switched_off_source?: { source_id: string; name: string; words: string[] }; // the question belongs there
   clarify?: Clarify;
   clarification?: { asked: string; answer: string };
   chosen_source?: string;

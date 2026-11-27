@@ -230,7 +230,13 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
                 onPickSource={(q, sid) => { speaker.unlock(); speaker.stop(); recorder.cancel(); ask(q, { pickSource: sid }); }}
                 onReply={(reply) => sendTyped(reply)}
                 onReplay={(answer) => { recorder.cancel(); speaker.speak(answer); }}
-                onRunSql={runSql} sqlRunning={sqlRunning} />
+                onRunSql={runSql} sqlRunning={sqlRunning}
+                onEnableSource={async (sid, q) => {
+                  speaker.unlock(); speaker.stop(); recorder.cancel();
+                  await api.setActive(sid, true);
+                  window.dispatchEvent(new Event("sources-changed")); // the sidebar refreshes its switches
+                  ask(q, { pickSource: sid });
+                }} />
             ))}
             <div ref={endRef} />
           </div>

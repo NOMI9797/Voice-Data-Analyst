@@ -146,7 +146,7 @@ function Details({ turn }: { turn: TurnData }) {
 }
 
 export default function TurnView({ turn, isLatest, phase, userSpeaking, pending, onPickSource, onReply, onReplay,
-  onRunSql, sqlRunning }: {
+  onRunSql, sqlRunning, onEnableSource }: {
   turn: TurnData;
   isLatest: boolean;
   phase: Phase;
@@ -157,6 +157,7 @@ export default function TurnView({ turn, isLatest, phase, userSpeaking, pending,
   onReplay: (text: string) => void;
   onRunSql: (turnId: number, sql: string) => void;
   sqlRunning: boolean;
+  onEnableSource: (sourceId: string, question: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const r = turn.reply;
@@ -186,7 +187,11 @@ export default function TurnView({ turn, isLatest, phase, userSpeaking, pending,
           ) : r ? (
             <>
               <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs">
-                {r.source_name && (
+                {r.switched_off_source ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">
+                    <Icon d={ICON.db} className="h-3 w-3" /> {r.switched_off_source.name} (switched off)
+                  </span>
+                ) : r.source_name && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
                     <Icon d={ICON.db} className="h-3 w-3" /> {r.source_name}
                     {r.switched_source && " (switched)"}
@@ -213,6 +218,15 @@ export default function TurnView({ turn, isLatest, phase, userSpeaking, pending,
                         </button>
                       ))}
                   <span className="text-xs text-slate-500">or just say your answer</span>
+                </div>
+              )}
+
+              {r.switched_off_source && isLatest && (
+                <div className="mt-3">
+                  <button onClick={() => onEnableSource(r.switched_off_source!.source_id, r.question)}
+                    className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-900 hover:bg-indigo-100">
+                    Turn on {r.switched_off_source.name} and ask
+                  </button>
                 </div>
               )}
 

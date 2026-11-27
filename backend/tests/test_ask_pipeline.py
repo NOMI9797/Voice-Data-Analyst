@@ -28,6 +28,7 @@ def env(monkeypatch):
     monkeypatch.setattr(pipeline, "widen", lambda r, extra: r)
     monkeypatch.setattr(pipeline, "tables_named_in", lambda sql, sid: [])
     monkeypatch.setattr(pipeline, "add_tables", lambda r, names: r)
+    monkeypatch.setattr(pipeline, "switched_off_fit", lambda q: None)
     monkeypatch.setattr(pipeline, "asdict", lambda r: {"source_id": r.source_id})
     monkeypatch.setattr(pipeline, "allowed_tables", lambda sid: TABLES)
 
@@ -361,3 +362,17 @@ def test_switched_off_source_is_not_used(env, monkeypatch):
     out = pipeline.ask("how many customers are there", source_ids=["olist"])
     assert out["status"] == "no_source"
     assert out["answer"] == "The Olist e-commerce data is switched off. Turn it on under Your data to ask it."
+
+
+
+def test_question_for_switched_off_source_says_so(env, monkeypatch):
+    def fake_retrieve(q, ids=None, **kw):
+        return SimpleNamespace(**{**RETRIEVAL, "source_scores": [{"source_id": "src1", "term_coverage": {"seller": 0.6}}]},
+                               question=q)
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
+    monkeypatch.setattr(pipeline, "switched_off_fit",
+                        lambda q: {"source_id": "olist", "name": "Olist e-commerce", "words": ["seller"]})
+    env["gen"].append(Generation(sql=None, message="There are no sellers in this data."))
+    out = pipeline.ask("how many sellers are in SP")
+    assert out["status"] == "cannot_answer" and "Olist e-commerce data, which is switched off" in out["answer"]
+    assert env["gen"] == [] and not env["ran"]

@@ -21,7 +21,7 @@ from app.llm import client as llm
 from app.nl2sql.sanity import suspicious
 from app.nl2sql.answer import spoken_answer, template_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
-from app.profiler.retriever import add_tables, retrieve, tables_named_in, widen
+from app.profiler.retriever import add_tables, retrieve, switched_off_fit, tables_named_in, widen
 from app.profiler.routing import resolve_choice, resolve_intent_reply
 from app.profiler.store import get_store
 from app.safety.executor import QueryError, run_query
@@ -169,6 +169,15 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     # a pure follow-up ("now break it down by month") has no subject words of its own: if the
     # conversation's source can't do it, say so rather than answer something else elsewhere
     has_subject = any(sc.get("term_coverage") for sc in (r.source_scores or []))
+    if not gen.sql and not gen.clarify_question and source_ids is None and has_subject:
+        # the question may be about data in a source that is switched off: say so, rather than
+        # trying the other active sources for something they don't have
+        off = switched_off_fit(question)
+        if off:
+            out["switched_off_source"] = off
+            out.pop("other_sources", None)  # the active ones don't have it either
+            return done("cannot_answer", f"That isn't in the data that's switched on. It looks like it's in the "
+                                         f"{off['name']} data, which is switched off. Turn it on under Your data to ask it.")
     if not gen.sql and not gen.clarify_question and prev and r.source_id == prev.source_id and has_subject:
         # We stayed on the previous question's source, but it can't answer this one.
         # Maybe the user changed topic: retry once on the source that fits the

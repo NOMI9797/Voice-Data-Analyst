@@ -113,6 +113,9 @@ export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
 
   useEffect(() => {
     refresh();
+    // a source switched on from the conversation ("Turn on ... and ask")
+    window.addEventListener("sources-changed", refresh);
+    return () => window.removeEventListener("sources-changed", refresh);
   }, [refresh]);
 
   const profiling = sources.some((s) => s.profile_status && !["ready", "missing"].includes(s.profile_status) && !s.profile_status.startsWith("error"));
