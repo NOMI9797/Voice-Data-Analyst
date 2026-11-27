@@ -42,11 +42,11 @@ Rules:
 - {dialect_tip}
 
 If the question cannot be answered with this schema, or is not about this data, set "sql" to null and explain why in "message".
-Never substitute a different concept for one the question names: sellers are not employees, payment types are not shipping companies, reviews are not ratings of tracks unless the schema says so. If a concept the question names is missing, set "sql" to null and say which one is missing.
+Never substitute a different concept for one the question names: suppliers are not customers, refunds are not payments, a product's rating is not its sales, unless the schema says they are the same. If a concept the question names is missing, set "sql" to null and say which one is missing.
 
 Vague questions: ASK instead of guessing when the question leaves out something that changes the answer and there is no sensible default. The typical case is a ranking or comparison with no measure: "top customers", "best products", "biggest sellers", "most valuable categories" (by revenue? by number of orders? by quantity?). Then set "sql" to null and fill "clarify" with ONE short spoken question (at most 15 words) and 2 or 3 short options. Offer the readings a business user most likely means (money spent or earned first, then counts), even if those tables are not in the schema above; the right tables are fetched once the user answers.
 Do NOT ask when:
-- the measure is stated or obvious ("most orders", "highest revenue", "most tracks", "worst reviews")
+- the measure is stated or obvious ("most orders", "highest revenue", "most items", "lowest rating")
 - only the time period is missing (use all the data), or only the number of results (use 10)
 - the EARLIER CONVERSATION or a CLARIFICATION below already settles it. Never ask twice.
 For small ambiguities you do not ask about, write the most reasonable query and state the assumption in "assumption".
