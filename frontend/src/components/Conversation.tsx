@@ -177,6 +177,7 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
   const busy = work !== "idle" || recorder.state === "processing";
 
   function orbClick() {
+    speaker.unlock(); // a click is when browsers allow sound to be enabled
     speaker.stop(); // interrupt the spoken answer
     if (recorder.state === "listening") recorder.stop();
     else {
@@ -187,6 +188,7 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
 
   function sendTyped(q: string) {
     if (!q.trim() || busy) return;
+    speaker.unlock();
     speaker.stop();
     recorder.cancel();
     setText("");
@@ -220,13 +222,13 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
       <div className="min-h-0 flex-1 overflow-y-auto">
         {turns.length === 0 ? (
           <EmptyState suggestions={suggestions}
-            onAsk={(q, sourceId) => { speaker.stop(); recorder.cancel(); ask(q, { pickSource: sourceId }); }} />
+            onAsk={(q, sourceId) => { speaker.unlock(); speaker.stop(); recorder.cancel(); ask(q, { pickSource: sourceId }); }} />
         ) : (
           <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
             {turns.map((t, i) => (
               <TurnView key={t.id} turn={t} isLatest={i === turns.length - 1} phase={phase} userSpeaking={recorder.speaking}
                 pending={pending}
-                onPickSource={(q, sid) => { speaker.stop(); recorder.cancel(); ask(q, { pickSource: sid }); }}
+                onPickSource={(q, sid) => { speaker.unlock(); speaker.stop(); recorder.cancel(); ask(q, { pickSource: sid }); }}
                 onReply={(reply) => sendTyped(reply)}
                 onReplay={(answer) => { recorder.cancel(); speaker.speak(answer); }}
                 onRunSql={runSql} sqlRunning={sqlRunning} />
@@ -240,6 +242,12 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
         <div className="mx-auto max-w-4xl px-4 py-3">
           {(notice || recorder.error) && (
             <p className="mb-2 rounded-lg bg-amber-50 px-3 py-1.5 text-sm text-amber-900" role="status">{recorder.error ?? notice}</p>
+          )}
+          {speaker.blocked && (
+            <p className="mb-2 rounded-lg bg-amber-50 px-3 py-1.5 text-sm text-amber-900" role="status">
+              The browser blocked sound for this page. Click <b>Play answer</b> on the answer, or allow sound for
+              localhost in the browser's site settings.
+            </p>
           )}
           <div className="flex items-center gap-3">
             <VoiceOrb phase={phase} level={recorder.level} onClick={orbClick} />

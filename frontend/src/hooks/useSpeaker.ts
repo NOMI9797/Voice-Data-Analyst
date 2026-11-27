@@ -25,8 +25,14 @@ async function fetchSpeech(text: string, signal: AbortSignal): Promise<string> {
   return URL.createObjectURL(await res.blob());
 }
 
+// 0.1 s of silence. Played inside a click so that browsers with strict autoplay rules
+// (Safari, some Chrome settings) allow the answer's audio that arrives seconds later.
+const SILENCE =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=";
+
 export function useSpeaker() {
   const [speaking, setSpeaking] = useState(false);
+  const [blocked, setBlocked] = useState(false); // the browser refused to play sound
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -36,6 +42,12 @@ export function useSpeaker() {
     audioRef.current?.pause();
     audioRef.current = null;
     setSpeaking(false);
+  }, []);
+
+  /** Call from a click handler (mic, Ask, a chip): unlocks audio for later playback. */
+  const unlock = useCallback(() => {
+    const a = new Audio(SILENCE);
+    a.play().then(() => setBlocked(false)).catch(() => {});
   }, []);
 
   /** Speak text. Resolves true when it played to the end, false if it was stopped
@@ -66,7 +78,10 @@ export function useSpeaker() {
               if (i === 0) onFirstAudio?.(performance.now());
             };
             ctrl.signal.addEventListener("abort", () => resolve(), { once: true });
-            audio.play().catch(reject);
+            audio.play().catch((e) => {
+              if (e instanceof DOMException && e.name === "NotAllowedError") setBlocked(true);
+              reject(e);
+            });
           });
         }
         return !ctrl.signal.aborted;
@@ -83,5 +98,5 @@ export function useSpeaker() {
     [stop],
   );
 
-  return { speak, stop, speaking };
+  return { speak, stop, unlock, speaking, blocked };
 }
