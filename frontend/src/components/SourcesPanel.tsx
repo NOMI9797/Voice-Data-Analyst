@@ -15,12 +15,14 @@ const ENGINE_COLOR: Record<Source["engine"], string> = {
   duckdb: "bg-amber-100 text-amber-800",
 };
 
+// Shows a source's profiling status (profiled, describing...).
 function ProfileBadge({ status }: { status?: string }) {
   if (!status || status === "ready") return <span className="text-emerald-700">· profiled</span>;
   if (status.startsWith("error")) return <span className="text-rose-700" title={status}>· profile failed</span>;
   return <span className="animate-pulse text-sky-700">· {status}…</span>;
 }
 
+// One database in the sidebar: engine, tables, on/off switch.
 function SourceCard({
   source,
   onToggle,
@@ -83,6 +85,7 @@ function SourceCard({
   );
 }
 
+// MAIN: the sidebar: list databases, switch on/off, connect, upload.
 export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
   const [sources, setSources] = useState<Source[]>([]);
   const signature = useRef("");
@@ -94,6 +97,7 @@ export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // Reloads the list of databases from the backend.
   const refresh = useCallback(async () => {
     try {
       const list = await api.listSources();
@@ -125,6 +129,7 @@ export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
     return () => clearInterval(t);
   }, [profiling, refresh]);
 
+  // Runs a sidebar action and refreshes the list.
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setError(null);
@@ -140,6 +145,7 @@ export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
     }
   }
 
+  // Connects a database from the pasted connection string.
   async function connect(e: React.FormEvent) {
     e.preventDefault();
     if (!url.trim()) return;
@@ -149,6 +155,7 @@ export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
     }
   }
 
+  // Uploads CSV or SQLite files as a new source.
   function upload(files: FileList | null) {
     if (!files || files.length === 0) return;
     run(() => api.uploadFiles(Array.from(files)));

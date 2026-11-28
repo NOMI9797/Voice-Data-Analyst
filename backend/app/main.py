@@ -14,6 +14,7 @@ from app.tts import piper_tts
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
+# On startup: load profiles, profile new databases in the background, and warm up Whisper, Piper and the embedding model.
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     store = get_store()

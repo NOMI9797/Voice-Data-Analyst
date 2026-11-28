@@ -9,6 +9,7 @@ type Plottable = "kpi" | "line" | "bar" | "scatter";
 const PLOTTABLE: ChartType[] = ["kpi", "line", "bar", "scatter"];
 const TYPE_LABEL: Record<ChartType, string> = { kpi: "Number", line: "Line", bar: "Bar", scatter: "Scatter", table: "Table", empty: "Empty" };
 
+// Saves the result as a CSV file.
 function download(name: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
@@ -16,6 +17,7 @@ function download(name: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
+// The chart title, e.g. 'Orders by month'.
 function title(spec: Extract<SqlRun, { ok: true }>["chart"]): string | null {
   if (!spec.x || spec.y.length === 0 || spec.type === "kpi") return null; // cards are self-labelled
   const y = spec.y.map(humanize).join(" and ");
@@ -24,6 +26,7 @@ function title(spec: Extract<SqlRun, { ok: true }>["chart"]): string | null {
 }
 
 /** Shows a query result as a chart, a table and the SQL. `onRun` re-runs edited SQL. */
+// MAIN: the Chart / Table / SQL tabs of an answer.
 export default function ResultView({ result, sql, onRun, running }: {
   result: SqlRun | null;
   sql: string;

@@ -28,6 +28,7 @@ const STATUS: Record<string, { label: string; tone: string }> = {
 };
 
 /** Follow-ups that edit the previous query (module 9), offered where they make sense. */
+// Chooses the follow-up chips ('Same for last year', 'Now break it down by month').
 function followUps(reply: AskResponse): string[] {
   const chart = reply.result?.chart;
   if (!chart || reply.status !== "answered") return [];
@@ -38,6 +39,7 @@ function followUps(reply: AskResponse): string[] {
   return [];
 }
 
+// Small line icon.
 function Icon({ d, className = "h-3.5 w-3.5" }: { d: string; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -55,6 +57,7 @@ const ICON = {
 };
 
 /** The question as the system understood it, with corrected names highlighted. */
+// The user's question bubble: what was heard, and corrected names in green.
 function UserBubble({ turn }: { turn: TurnData }) {
   const fixes = turn.correction?.corrections ?? [];
   const shown = turn.reply?.question ?? turn.correction?.corrected ?? turn.asked;
@@ -84,6 +87,7 @@ function UserBubble({ turn }: { turn: TurnData }) {
   );
 }
 
+// The collapsible Details: time per step, tables used, repaired attempts.
 function Details({ turn }: { turn: TurnData }) {
   const [open, setOpen] = useState(false);
   const [schema, setSchema] = useState(false);
@@ -145,6 +149,7 @@ function Details({ turn }: { turn: TurnData }) {
   );
 }
 
+// MAIN: one question and its answer card (answer, buttons, chart/table/SQL, follow-ups).
 export default function TurnView({ turn, isLatest, phase, userSpeaking, pending, onPickSource, onReply, onReplay,
   onRunSql, sqlRunning, onEnableSource }: {
   turn: TurnData;

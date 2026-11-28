@@ -16,6 +16,7 @@ from app.config import get_settings
 log = logging.getLogger(__name__)
 
 
+# Error raised when the language model can't be reached or gives an unusable reply.
 class LLMError(RuntimeError):
     pass
 
@@ -26,6 +27,7 @@ BASE_URLS = {
 }
 
 
+# Creates the OpenAI-compatible client pointed at Gemini (created once).
 @lru_cache
 def _client():
     from openai import OpenAI
@@ -39,10 +41,12 @@ def _client():
                   timeout=s.llm_timeout_seconds, max_retries=0)  # retries = the model chain
 
 
+# True when an LLM API key is set.
 def available() -> bool:
     return bool(get_settings().llm_key)
 
 
+# The order of models to try: the main model first, then the fallbacks.
 def _model_chain(model: str | None) -> list[str]:
     """Primary model first, then the configured fallbacks (no duplicates)."""
     s = get_settings()
@@ -51,6 +55,7 @@ def _model_chain(model: str | None) -> list[str]:
     return list(dict.fromkeys(chain))
 
 
+# Decides if an error is temporary (try the next model) or permanent (stop).
 def _is_transient(exc: Exception) -> bool:
     """Overload, rate limit, timeout or server error: worth trying another model.
     Bad key / bad request are not (another model would fail the same way)."""
@@ -63,6 +68,7 @@ def _is_transient(exc: Exception) -> bool:
     return False
 
 
+# Sends messages to Gemini; on overload, rate limit or timeout it tries the next model.
 def chat(messages: list[dict], *, json_mode: bool = False, temperature: float = 0.0,
          max_tokens: int = 2000, model: str | None = None, timeout: float | None = None,
          fallback: bool = True) -> str:
@@ -92,6 +98,7 @@ def chat(messages: list[dict], *, json_mode: bool = False, temperature: float = 
     raise LLMError(f"All LLM models unavailable, last error: {last_exc}") from last_exc
 
 
+# Reads a JSON reply, also when the model wrapped it in a code block.
 def _parse_json(raw: str) -> dict:
     text = raw.strip()
     if text.startswith("```"):  # some models wrap JSON in a code fence despite json mode
@@ -99,6 +106,7 @@ def _parse_json(raw: str) -> dict:
     return json.loads(text)
 
 
+# Like chat(), but the reply must be JSON; broken JSON also moves on to the next model.
 def chat_json(messages: list[dict], *, model: str | None = None, fallback: bool = True, **kw) -> dict:
     """Like chat(), but the reply must be a JSON object. A model that answers with
     broken JSON (e.g. a thinking model cut off by the token limit) is treated like

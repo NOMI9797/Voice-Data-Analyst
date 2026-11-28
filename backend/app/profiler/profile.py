@@ -37,6 +37,7 @@ _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?)?")
 
 # ------------------------------------------------------------------ helpers
 
+# Turns any database value into short text for the profile.
 def _to_str(v) -> str:
     if isinstance(v, (datetime, date)):
         return v.isoformat(sep=" ") if isinstance(v, datetime) else v.isoformat()
@@ -48,6 +49,7 @@ def _to_str(v) -> str:
     return s if len(s) <= 200 else s[:200] + "…"
 
 
+# Groups a raw column type into number / text / date / bool.
 def _base_kind(col_type) -> str:
     try:
         if isinstance(col_type, sat.Boolean):
@@ -70,6 +72,7 @@ def _base_kind(col_type) -> str:
     return "other"
 
 
+# Guesses whether a column is an ID (by name and values).
 def _looks_like_id(name: str, is_pk: bool, values: list) -> bool:
     n = name.lower()
     if is_pk or n == "id" or n.endswith("_id") or n.endswith("id") and n[:-2].isalpha() and name[-2:] in ("Id", "ID"):
@@ -78,26 +81,31 @@ def _looks_like_id(name: str, is_pk: bool, values: list) -> bool:
     return bool(strs) and sum(bool(_HEX_ID.match(s)) for s in strs) / len(strs) > 0.9
 
 
+# Splits names like CustomerId or order_status into words.
 def _split_words(identifier: str) -> str:
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", identifier)
     return re.sub(r"[_\-.\s]+", " ", s).strip().lower()
 
 
+# Quotes table and column names correctly for each database engine.
 class _Q:
     """Identifier quoting with the engine's own rules (handles spaces, reserved words)."""
 
     def __init__(self, eng: Engine):
         self.p = eng.dialect.identifier_preparer
 
+    # Quotes a column name.
     def col(self, name: str) -> str:
         return self.p.quote(name)
 
+    # Quotes a table name (with schema if needed).
     def table(self, schema: str | None, name: str) -> str:
         return (self.p.quote_schema(schema) + "." if schema else "") + self.p.quote(name)
 
 
 # ------------------------------------------------------------------ table profiling
 
+# Profiles one table: row count, and per column type, blanks, distinct values, min/max, samples, value lists.
 def _profile_table(conn, q: _Q, schema: str | None, name: str, display: str, cols: list[dict],
                    pk: set[str], is_view: bool) -> TableProfile:
     tref = q.table(schema, name)
@@ -185,10 +193,12 @@ def _profile_table(conn, q: _Q, schema: str | None, name: str, display: str, col
 
 # ------------------------------------------------------------------ relationships
 
+# Lowercases a name and removes underscores for comparing.
 def _norm(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
+# Makes a table name singular (orders -> order) for matching keys.
 def _singular(word: str) -> str:
     w = _norm(word)
     if w.endswith("ies"):
@@ -200,6 +210,7 @@ def _singular(word: str) -> str:
     return w
 
 
+# Finds joins that are not declared: matching column names confirmed by value overlap.
 def _infer_relationships(conn, q: _Q, tables: list[TableProfile], schemas: dict[str, str | None],
                          raw_names: dict[str, str], declared: list[Relationship]) -> list[Relationship]:
     """Find likely joins: column A.x matches a key column B.y by name, confirmed by value overlap."""
@@ -246,6 +257,7 @@ def _infer_relationships(conn, q: _Q, tables: list[TableProfile], schemas: dict[
     return out
 
 
+# Measures how many values of one column exist in another (used to confirm a join).
 def _value_overlap(conn, q: _Q, schemas, raw_names, at, ac, bt, bc) -> float | None:
     a_ref = q.table(schemas[at.name], raw_names[at.name])
     b_ref = q.table(schemas[bt.name], raw_names[bt.name])
@@ -269,6 +281,7 @@ def _value_overlap(conn, q: _Q, schemas, raw_names, at, ac, bt, bc) -> float | N
 
 # ------------------------------------------------------------------ entry point
 
+# MAIN: profiles a whole database (all tables, columns and relationships).
 def profile_source(source: Source, eng: Engine) -> SourceProfile:
     t0 = time.perf_counter()
     q = _Q(eng)

@@ -18,10 +18,12 @@ COUNT_COLUMN = re.compile(r"(count|num|number|qty|quantity|orders|customers|item
 PERCENT_COLUMN = re.compile(r"(pct|percent|percentage|share)", re.I)
 
 
+# True for numbers (not true/false).
 def _is_num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+# Spots results that ran but look wrong (no rows, all blank, negative counts, % above 100).
 def suspicious(question: str, columns: list[str], rows: list[list], truncated: bool) -> str | None:
     """Returns a short description of what looks wrong, or None."""
     if not rows:

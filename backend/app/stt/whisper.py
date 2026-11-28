@@ -33,6 +33,7 @@ _model = None
 _lock = threading.Lock()
 
 
+# Loads the local Whisper model (once).
 def _get_model():
     global _model
     with _lock:
@@ -47,6 +48,7 @@ def _get_model():
         return _model
 
 
+# Loads Whisper at startup so the first question is fast.
 def warm_up() -> None:
     try:
         m = _get_model()
@@ -55,6 +57,7 @@ def warm_up() -> None:
         log.exception("whisper warm-up failed")
 
 
+# Reads the browser's WAV audio into numbers for Whisper.
 def _decode(audio: bytes) -> np.ndarray | bytes:
     """16 kHz mono WAV from the browser -> float32 array (fast path, no ffmpeg).
     Anything else (webm/ogg/mp3...) is handed to faster-whisper's own decoder."""
@@ -66,6 +69,7 @@ def _decode(audio: bytes) -> np.ndarray | bytes:
     return audio
 
 
+# Detects Whisper looping on a few words instead of transcribing.
 def looks_looped(text: str, compression_ratios: list[float]) -> bool:
     """Whisper sometimes loops on a few words instead of transcribing ("bage, tupa, bage,
     tupa, bage ..."), on noise or when prompted with a word list. Signs: Whisper's own
@@ -78,6 +82,7 @@ def looks_looped(text: str, compression_ratios: list[float]) -> bool:
     return len(words) >= 6 and len(set(words)) / len(words) < 0.5
 
 
+# MAIN: turns spoken audio into text with Whisper (local).
 def transcribe(audio: bytes, hint: str = "") -> dict:
     t0 = time.perf_counter()
     model = _get_model()

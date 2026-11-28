@@ -8,17 +8,20 @@ from app.nl2sql.pipeline import ask
 router = APIRouter(tags=["ask"])
 
 
+# One earlier question sent by the browser (for follow-ups).
 class TurnIn(BaseModel):
     question: str
     sql: str = ""
     source_id: str = ""
 
 
+# One option of a 'which database?' question.
 class OptionIn(BaseModel):
     source_id: str
     name: str
 
 
+# The clarifying question the app asked last time.
 class PendingIn(BaseModel):
     kind: str = "source"  # source: which database? | intent: what did you mean?
     question: str
@@ -27,6 +30,7 @@ class PendingIn(BaseModel):
     source_id: str | None = None
 
 
+# What the browser sends: the question, history, pending clarification.
 class AskIn(BaseModel):
     question: str = Field(max_length=1000)
     history: list[TurnIn] = Field(default_factory=list, max_length=10)
@@ -35,6 +39,7 @@ class AskIn(BaseModel):
     speak: bool = True  # False: template answer instead of an LLM-written one (evaluation runs)
 
 
+# API /api/ask: runs the whole pipeline (pipeline.ask) for one question.
 @router.post("/ask")
 async def ask_question(body: AskIn) -> dict:
     """Question in, spoken answer + SQL + rows + chart out."""

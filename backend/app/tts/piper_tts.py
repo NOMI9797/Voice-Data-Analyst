@@ -26,6 +26,7 @@ _voice = None
 _lock = threading.Lock()
 
 
+# Downloads the Piper voice the first time it is needed.
 def _voice_files(name: str) -> tuple[Path, Path]:
     """Download e.g. en_US-lessac-medium(.onnx/.onnx.json) if missing."""
     locale, speaker, quality = name.split("-")
@@ -42,6 +43,7 @@ def _voice_files(name: str) -> tuple[Path, Path]:
     return onnx, cfg
 
 
+# Loads the Piper voice (once).
 def _get_voice():
     global _voice
     with _lock:
@@ -55,6 +57,7 @@ def _get_voice():
         return _voice
 
 
+# Loads Piper at startup so the first answer is fast.
 def warm_up() -> None:
     try:
         synthesize("Ready.")
@@ -62,6 +65,7 @@ def warm_up() -> None:
         log.exception("piper warm-up failed")
 
 
+# Makes numbers and symbols read naturally.
 def _speakable(text: str) -> str:
     """Make numbers and symbols read naturally."""
     t = text.replace("%", " percent").replace("&", " and ")
@@ -70,6 +74,7 @@ def _speakable(text: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
+# MAIN: turns text into a spoken WAV file with Piper (local).
 def synthesize(text: str, speed: float = 1.0) -> tuple[bytes, float]:
     """Return (WAV bytes, milliseconds taken)."""
     from piper import SynthesisConfig
@@ -82,6 +87,7 @@ def synthesize(text: str, speed: float = 1.0) -> tuple[bytes, float]:
     return buf.getvalue(), round((time.perf_counter() - t0) * 1000, 1)
 
 
+# Splits an answer into sentences for faster playback.
 def split_sentences(text: str) -> list[str]:
     """Split for streaming playback: the first sentence can play while the rest is synthesized."""
     parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9])", text.strip())

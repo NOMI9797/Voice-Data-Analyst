@@ -24,6 +24,7 @@ SCORE_MARGIN = 0.15
 MAX_CHOICES = 3
 
 
+# Which source was chosen (or none = ask the user), and why.
 @dataclass
 class Decision:
     source_id: str | None      # chosen source; None means "ask"
@@ -31,6 +32,7 @@ class Decision:
     reason: str
 
 
+# Chooses the database: one clear fit -> use it; a genuine tie -> ask which one.
 def decide(source_scores: list[dict], coverage_delta: float = COVERAGE_DELTA,
            score_margin: float = SCORE_MARGIN) -> Decision:
     if not source_scores:
@@ -59,11 +61,13 @@ _FILLER = {"the", "a", "an", "one", "data", "database", "db", "source", "please"
            "use", "in", "from", "for", "about", "it", "its", "that", "this", "is", "go", "with", "let's", "lets"}
 
 
+# Splits text into lowercase words.
 def _words(s: str) -> list[str]:
     import re
     return re.findall(r"[a-z0-9']+", s.lower().replace("-", " "))
 
 
+# Understands the answer to 'which database?' ('Olist', 'the second one').
 def resolve_choice(reply: str, options: list[dict]) -> str | None:
     """Matches a reply like "Olist", "the music store", "second one" or "the last
     one" to one of the offered sources. Returns its source_id, or None when the
@@ -99,6 +103,7 @@ def resolve_choice(reply: str, options: list[dict]) -> str | None:
     return _sounds_like_option(words, options)
 
 
+# Understands database names Whisper mangled ('or list' -> Olist).
 def _sounds_like_option(words: list[str], options: list[dict]) -> str | None:
     """Speech recognition mangles short brand names: "Olist" comes back as "or list".
     Compare the reply, with spaces removed, to each option's distinctive name words and
@@ -128,6 +133,7 @@ _QUESTION_START = {"how", "what", "which", "who", "whom", "when", "where", "why"
                    "tell", "compare", "find", "count", "is", "are", "does", "do", "can"}
 
 
+# Turns 'first', 'second', 'the last one' into a position.
 def _position(words: list[str], n: int) -> int | None:
     """"second", "the 2nd one", "number 3", "the last one" -> index; "one" alone means the first."""
     if "last" in words or "latter" in words:
@@ -138,6 +144,7 @@ def _position(words: list[str], n: int) -> int | None:
     return hits.pop() if len(hits) == 1 else None
 
 
+# Understands the answer to a vague-question clarification ('by spending').
 def resolve_intent_reply(reply: str, options: list[str]) -> str | None:
     """Answer to a clarification like "Top customers by total spending or by number
     of orders?". Returns the chosen option text, the reply itself when it is a

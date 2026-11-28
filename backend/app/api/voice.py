@@ -12,6 +12,7 @@ router = APIRouter(tags=["voice"])
 MAX_AUDIO_BYTES = 20 * 1024 * 1024  # ~10 minutes of 16 kHz WAV
 
 
+# API /api/stt: audio in, text out (Whisper).
 @router.post("/stt")
 async def speech_to_text(audio: UploadFile = File(...), hint: str = Form("")) -> dict:
     data = await audio.read()
@@ -25,11 +26,13 @@ async def speech_to_text(audio: UploadFile = File(...), hint: str = Form("")) ->
         raise HTTPException(400, f"Could not transcribe audio: {exc}") from exc
 
 
+# Text to speak and its speed.
 class TTSIn(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     speed: float = Field(1.0, ge=0.5, le=2.0)
 
 
+# API /api/tts: text in, spoken WAV out (Piper).
 @router.post("/tts")
 async def text_to_speech(body: TTSIn) -> Response:
     wav, ms = await run_in_threadpool(piper_tts.synthesize, body.text, body.speed)

@@ -31,6 +31,7 @@ SYSTEM = """You are a data analyst speaking to a business user. Answer their que
 Reply as JSON: {"answer": "..."}"""
 
 
+# Writes up to 30 result rows as text for the LLM.
 def _rows_text(columns: list[str], rows: list[list], total: int, truncated: bool) -> str:
     shown = rows[:MAX_ROWS]
     lines = [" | ".join(columns)] + [" | ".join("" if v is None else str(v) for v in r) for r in shown]
@@ -41,6 +42,7 @@ def _rows_text(columns: list[str], rows: list[list], total: int, truncated: bool
     return "\n".join(lines) + tail
 
 
+# Backup answer without the LLM: speaks the computed facts.
 def template_answer(columns: list[str], rows: list[list], chart: dict) -> str:
     """No-LLM fallback: the first computed facts, as plain sentences."""
     if not rows:
@@ -51,6 +53,7 @@ def template_answer(columns: list[str], rows: list[list], chart: dict) -> str:
     return f"I found {len(rows)} row{'s' if len(rows) != 1 else ''}. They are shown below."
 
 
+# MAIN: asks Gemini for a 1-2 sentence spoken answer (6 s deadline, then the backup).
 def spoken_answer(question: str, columns: list[str], rows: list[list], row_count: int,
                   truncated: bool, chart: dict, assumption: str = "") -> tuple[str, bool]:
     """Returns (answer, written_by_llm)."""

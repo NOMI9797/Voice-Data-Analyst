@@ -4,6 +4,7 @@ import { formatValue, humanize } from "./format";
 
 const PAGE = 25;
 
+// Sort order for table values (numbers, text, blanks last).
 function compare(a: Cell, b: Cell): number {
   if (a === b) return 0;
   if (a === null) return 1; // empty values last
@@ -12,6 +13,7 @@ function compare(a: Cell, b: Cell): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true });
 }
 
+// MAIN: the sortable, paged results table.
 export default function DataTable({ columns, rows }: { columns: string[]; rows: Cell[][] }) {
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [page, setPage] = useState(0);
@@ -29,6 +31,7 @@ export default function DataTable({ columns, rows }: { columns: string[]; rows: 
   const current = Math.min(page, pages - 1);
   const visible = sorted.slice(current * PAGE, current * PAGE + PAGE);
 
+  // Click a column header to sort by it.
   function toggle(i: number) {
     setPage(0);
     setSort((s) => (s?.col !== i ? { col: i, dir: numeric[i] ? -1 : 1 } : s.dir === (numeric[i] ? -1 : 1) ? { col: i, dir: s.dir === 1 ? -1 : 1 } : null));

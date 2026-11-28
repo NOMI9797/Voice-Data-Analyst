@@ -6,6 +6,7 @@ import { useCallback, useRef, useState } from "react";
  * so the first sound comes out after ~one sentence of synthesis (~100-200 ms).
  */
 
+// Splits the answer into sentences so the first can play sooner.
 function splitSentences(text: string): string[] {
   return text
     .trim()
@@ -14,6 +15,7 @@ function splitSentences(text: string): string[] {
     .filter(Boolean);
 }
 
+// Asks the backend (Piper) to speak one sentence; returns the audio.
 async function fetchSpeech(text: string, signal: AbortSignal): Promise<string> {
   const res = await fetch("/api/tts", {
     method: "POST",
@@ -30,12 +32,14 @@ async function fetchSpeech(text: string, signal: AbortSignal): Promise<string> {
 const SILENCE =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=";
 
+// MAIN: plays the spoken answer sentence by sentence.
 export function useSpeaker() {
   const [speaking, setSpeaking] = useState(false);
   const [blocked, setBlocked] = useState(false); // the browser refused to play sound
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Stops speaking (when the user clicks the mic to interrupt).
   const stop = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -45,6 +49,7 @@ export function useSpeaker() {
   }, []);
 
   /** Call from a click handler (mic, Ask, a chip): unlocks audio for later playback. */
+  // Plays a tiny silence on a click so the browser allows sound later.
   const unlock = useCallback(() => {
     const a = new Audio(SILENCE);
     a.play().then(() => setBlocked(false)).catch(() => {});
@@ -52,6 +57,7 @@ export function useSpeaker() {
 
   /** Speak text. Resolves true when it played to the end, false if it was stopped
    *  (barge-in, new question) or failed. onFirstAudio fires when sound starts. */
+  // Speaks a text: first sentence plays while the rest are being made.
   const speak = useCallback(
     async (text: string, onFirstAudio?: (t: number) => void): Promise<boolean> => {
       stop();

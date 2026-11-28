@@ -7,6 +7,7 @@ import VoiceOrb, { phaseLabel, type Phase } from "./VoiceOrb";
 
 let nextId = 1;
 
+// The empty screen: welcome text and starter questions per database.
 function EmptyState({ suggestions, onAsk }: { suggestions: Suggestion[]; onAsk: (q: string, sourceId: string) => void }) {
   const bySource = suggestions.reduce<Record<string, Suggestion[]>>((acc, s) => {
     (acc[s.source_name] ??= []).push(s);
@@ -48,6 +49,7 @@ function EmptyState({ suggestions, onAsk }: { suggestions: Suggestion[]; onAsk: 
   );
 }
 
+// MAIN: the conversation: questions, answers, voice, memory of the last 3 questions.
 export default function Conversation({ sourcesVersion }: { sourcesVersion: number }) {
   const [turns, setTurns] = useState<TurnData[]>([]);
   const [text, setText] = useState("");
@@ -76,9 +78,11 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [turns.length, lastTurn?.loading]);
 
+  // Updates one question card on screen.
   const update = (id: number, patch: Partial<TurnData> | ((t: TurnData) => Partial<TurnData>)) =>
     setTurns((all) => all.map((t) => (t.id === id ? { ...t, ...(typeof patch === "function" ? patch(t) : patch) } : t)));
 
+  // Runs one question: fix names -> /api/ask -> show answer -> speak it -> listen again if it asked a question.
   async function ask(question: string, opts: { viaVoice?: boolean; speechEndAt?: number | null; timings?: Timings; pickSource?: string } = {}) {
     const id = nextId++;
     const t: Timings = { ...(opts.timings ?? {}) };
@@ -133,6 +137,7 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
     }
   }
 
+  // When recording ends: send audio to Whisper, then ask the question.
   const recorder = useRecorder({
     onRecording: async (rec: Recording) => {
       if (!rec.hadSpeech) {
@@ -175,6 +180,7 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
           : speaker.speaking ? "speaking" : "idle";
   const busy = work !== "idle" || recorder.state === "processing";
 
+  // The mic button: start listening, stop, or interrupt the spoken answer.
   function orbClick() {
     speaker.unlock(); // a click is when browsers allow sound to be enabled
     speaker.stop(); // interrupt the spoken answer
@@ -185,6 +191,7 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
     }
   }
 
+  // Sends a typed question.
   function sendTyped(q: string) {
     if (!q.trim() || busy) return;
     speaker.unlock();
@@ -194,6 +201,7 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
     ask(q.trim());
   }
 
+  // Re-runs SQL edited in the SQL tab.
   async function runSql(turnId: number, sql: string) {
     const turn = turns.find((t) => t.id === turnId);
     const sourceId = turn?.reply?.source_id ?? turn?.reply?.retrieval?.source_id;
@@ -207,6 +215,7 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
     }
   }
 
+  // Clears the conversation and its memory.
   function newConversation() {
     speaker.stop();
     recorder.cancel();

@@ -3,6 +3,7 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# All settings in one place, read from .env (Gemini key, models, row limit, timeout, max repairs).
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
     llm_fallback_models: str = "gemini-flash-lite-latest,gemini-3.8-flash,gemini-3.5-flash"
     llm_timeout_seconds: float = 30
 
+    # The API key for whichever LLM provider is selected.
     @property
     def llm_key(self) -> str:
         return self.gemini_api_key if self.llm_provider == "gemini" else self.openai_api_key
@@ -36,6 +38,7 @@ class Settings(BaseSettings):
     data_dir: str = "/data"
 
 
+# Gives every file the same Settings object (created once).
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

@@ -5,6 +5,7 @@ import type { Cell } from "../api/client";
 export const SERIES_COLORS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"];
 
 /** order_purchase_timestamp -> Order purchase timestamp, CategoryName -> Category name */
+// Turns column names into readable words.
 export function humanize(name: string): string {
   const spaced = name
     .replace(/_/g, " ")
@@ -19,6 +20,7 @@ const full = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 
 /** Value in a table cell or tooltip: full precision, thousands separators. */
+// Formats a value for the table (thousands separators).
 export function formatValue(v: Cell): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "number") return full.format(v);
@@ -27,12 +29,14 @@ export function formatValue(v: Cell): string {
 }
 
 /** Axis tick: full under 10,000, compact (12K, 3.4M) above. */
+// Formats chart axis numbers (12K, 3.4M).
 export function formatTick(v: unknown): string {
   if (typeof v !== "number") return String(v ?? "");
   return Math.abs(v) < 10_000 ? full.format(v) : compact.format(v);
 }
 
 /** Headline number: compact for big values, full otherwise. */
+// Formats the big-number cards.
 export function formatHeadline(v: Cell): string {
   if (typeof v !== "number") return formatValue(v);
   return Math.abs(v) >= 1_000_000 ? compact.format(v) : full.format(v);
@@ -41,6 +45,7 @@ export function formatHeadline(v: Cell): string {
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** True when every value is a whole month (2017-03 or 2017-03-01[ 00:00:00]). */
+// True when dates are whole months.
 export function isMonthly(values: Cell[]): boolean {
   const vals = values.filter((v) => v !== null);
   return vals.length > 0 && vals.every((v) => typeof v === "string" && /^\d{4}-\d{2}(-01([ T]00:00:00(\.0+)?([+-]\d{2}:?\d{2}|Z)?)?)?$/.test(v));
@@ -48,6 +53,7 @@ export function isMonthly(values: Cell[]): boolean {
 
 /** Time axis label. Years stay plain (2021, not 2,021); whole months read "Mar 2017";
  *  a midnight time part is dropped so axes stay short. */
+// Formats dates for the chart (Mar 2017, 2021).
 export function formatTemporal(v: Cell, monthly = false): string {
   if (typeof v === "number") return String(v);
   if (typeof v !== "string") return formatValue(v);
@@ -59,6 +65,7 @@ export function formatTemporal(v: Cell, monthly = false): string {
 }
 
 /** Round axis ticks from 0 (or the minimum, if negative): steps of 1, 2, 2.5 or 5 x 10^k. */
+// Round numbers for the chart axis (0, 10K, 20K...).
 export function niceTicks(min: number, max: number, target = 5): number[] {
   const lo = Math.min(0, min);
   const hi = Math.max(0, max);
@@ -71,6 +78,7 @@ export function niceTicks(min: number, max: number, target = 5): number[] {
   return ticks;
 }
 
+// Turns the result into CSV text for download.
 export function toCsv(columns: string[], rows: Cell[][]): string {
   const esc = (v: Cell) => {
     if (v === null || v === undefined) return "";

@@ -3,6 +3,7 @@ import { api, type Health } from "./api/client";
 import Conversation from "./components/Conversation";
 import SourcesPanel from "./components/SourcesPanel";
 
+// One green/red status dot in the header.
 function Status({ ok, label, title }: { ok: boolean; label: string; title: string }) {
   return (
     <span title={title} className="hidden items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600 sm:flex">
@@ -12,6 +13,7 @@ function Status({ ok, label, title }: { ok: boolean; label: string; title: strin
   );
 }
 
+// MAIN: the page layout: header, data sidebar, conversation.
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null);
   const [healthError, setHealthError] = useState(false);

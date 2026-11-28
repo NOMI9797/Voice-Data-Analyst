@@ -16,16 +16,19 @@ SQLITE_EXT = {".db", ".sqlite", ".sqlite3"}
 CSV_EXT = {".csv", ".tsv", ".txt"}
 
 
+# A new connection: name and connection string.
 class ConnectionIn(BaseModel):
     name: str = ""
     url: str
 
 
+# A change to a source: switch on/off or rename.
 class SourcePatch(BaseModel):
     active: bool | None = None
     name: str | None = None
 
 
+# A source plus its tables and profiling status, for the sidebar.
 def _with_tables(s) -> dict:
     out = s.public()
     out["profile_status"] = get_store().status(s.id)
@@ -37,11 +40,13 @@ def _with_tables(s) -> dict:
     return out
 
 
+# API: lists all sources for the sidebar.
 @router.get("")
 async def list_sources() -> list[dict]:
     return await run_in_threadpool(lambda: [_with_tables(s) for s in get_registry().list()])
 
 
+# API: connects a new database from a connection string.
 @router.post("", status_code=201)
 async def add_connection(body: ConnectionIn) -> dict:
     try:
@@ -52,6 +57,7 @@ async def add_connection(body: ConnectionIn) -> dict:
     return await run_in_threadpool(_with_tables, s)
 
 
+# API: adds uploaded CSV or SQLite files as a source.
 @router.post("/upload", status_code=201)
 async def upload(files: list[UploadFile] = File(...), name: str = Form("")) -> dict:
     exts = {Path(f.filename or "").suffix.lower() for f in files}
@@ -90,6 +96,7 @@ async def upload(files: list[UploadFile] = File(...), name: str = Form("")) -> d
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+# API: switches a source on/off or renames it.
 @router.patch("/{source_id}")
 def update_source(source_id: str, body: SourcePatch) -> dict:
     reg = get_registry()
@@ -104,6 +111,7 @@ def update_source(source_id: str, body: SourcePatch) -> dict:
     return s.public()
 
 
+# API: removes a source.
 @router.delete("/{source_id}", status_code=204)
 def delete_source(source_id: str) -> None:
     try:

@@ -31,10 +31,12 @@ MAX_SERIES = 8
 SAMPLE = 500
 
 
+# True for numbers (not true/false).
 def _is_num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
+# Decides if a column is a date, a number, an ID or a category.
 def classify_column(name: str, values: list) -> str:
     vals = [v for v in values[:SAMPLE] if v is not None and v != ""]
     if not vals:
@@ -57,10 +59,12 @@ def classify_column(name: str, values: list) -> str:
     return "category"
 
 
+# How many different values a column has.
 def _distinct(values: list) -> int:
     return len({v for v in values if v is not None})
 
 
+# Avoids mixing very different numbers on one chart axis.
 def _measures_for_plot(measures: list[str], cols: dict[str, list]) -> list[str]:
     """First measure, plus others on a similar scale (a count next to a revenue
     sum would flatten into the axis)."""
@@ -80,11 +84,13 @@ def _measures_for_plot(measures: list[str], cols: dict[str, list]) -> list[str]:
     return keep
 
 
+# Turns a column name into readable words.
 def _h(name: str) -> str:
     """order_purchase_timestamp / CategoryName -> 'order purchase timestamp' / 'category name'."""
     return re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", name).replace("_", " ").strip().lower()
 
 
+# MAIN: picks the chart: number card, line, bar, grouped bar, scatter or table.
 def choose_chart(columns: list[str], rows: list[list]) -> dict:
     n = len(rows)
     cols = {c: [r[i] for r in rows] for i, c in enumerate(columns)}
@@ -146,6 +152,7 @@ def choose_chart(columns: list[str], rows: list[list]) -> dict:
     return spec("table", "No simple chart fits this result, so it is shown as a table.")
 
 
+# Horizontal bars for many or long labels, vertical otherwise.
 def _orientation(labels: list, count: int) -> str:
     longest = max((len(str(v)) for v in labels[:MAX_BAR_CATEGORIES] if v is not None), default=0)
     return "horizontal" if count > 8 or longest > 12 else "vertical"

@@ -56,6 +56,7 @@ Reply with JSON only:
  "clarify": {{"question": "...", "options": ["...", "..."]}} or null}}"""
 
 
+# One earlier question and its SQL (for follow-ups).
 @dataclass
 class Turn:
     question: str
@@ -63,6 +64,7 @@ class Turn:
     source_id: str = ""
 
 
+# What the LLM returned: SQL, an assumption, a message or a clarifying question.
 @dataclass
 class Generation:
     sql: str | None
@@ -73,10 +75,12 @@ class Generation:
     clarify_options: list[str] = field(default_factory=list)
 
 
+# The rules for the SQL writer, plus tips for this database's dialect.
 def _system(dialect: str | None) -> str:
     return SYSTEM.format(dialect_tip=DIALECT_TIPS.get(dialect or "", "Use standard SQL."))
 
 
+# Adds the tables, matched values, earlier questions and clarification answer.
 def _context(schema_text: str, value_hits: list[dict], history: list[Turn], clarification: dict | None = None) -> str:
     parts = [schema_text]
     if value_hits:
@@ -91,6 +95,7 @@ def _context(schema_text: str, value_hits: list[dict], history: list[Turn], clar
     return "\n\n".join(parts)
 
 
+# Reads the LLM's JSON reply safely.
 def _parse(out: dict) -> Generation:
     sql = out.get("sql")
     if isinstance(sql, str):
@@ -107,6 +112,7 @@ def _parse(out: dict) -> Generation:
                       clarify_question=cq, clarify_options=opts)
 
 
+# MAIN: asks Gemini to write the SQL (or a clarifying question).
 def generate_sql(question: str, schema_text: str, dialect: str | None,
                  value_hits: list[dict] | None = None, history: list[Turn] | None = None,
                  clarification: dict | None = None) -> Generation:
@@ -119,6 +125,7 @@ def generate_sql(question: str, schema_text: str, dialect: str | None,
     return _parse(chat_json(msgs, max_tokens=1200))
 
 
+# Sends the failed SQL and its error back to Gemini to fix it.
 def repair_sql(question: str, schema_text: str, dialect: str | None, bad_sql: str, error: str,
                value_hits: list[dict] | None = None, history: list[Turn] | None = None,
                clarification: dict | None = None) -> Generation:

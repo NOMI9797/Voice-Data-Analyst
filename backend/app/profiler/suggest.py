@@ -17,11 +17,13 @@ from app.profiler.models import ColumnProfile, SourceProfile, TableProfile
 MAX_PER_SOURCE = 3
 
 
+# Splits a column or table name into readable words.
 def _words(name: str) -> str:
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", name.rsplit(".", 1)[-1]).replace("_", " ")
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
+# Makes a table name plural for a question ('order' -> 'orders').
 def _plural(name: str) -> str:
     w = _words(name)
     if w.endswith(("s", "data", "info")):
@@ -36,6 +38,7 @@ SUM_MEASURE = re.compile(r"(value|amount|total|revenue|sales|freight|cost|paymen
 AVG_MEASURE = re.compile(r"(price|score|rating|weight|length|height|width|size|duration|milliseconds|age)", re.I)
 
 
+# True for small category columns (not IDs, names or yes/no flags).
 def _is_category(c: ColumnProfile) -> bool:
     name = c.name.lower()
     is_flag = c.values and {v.strip().lower() for v in c.values} <= FLAG_VALUES
@@ -43,18 +46,21 @@ def _is_category(c: ColumnProfile) -> bool:
             and not re.search(r"(^id$|_id$|id$|name$|phone|email|address|zip|code|postal)", name))
 
 
+# True for number columns worth adding up or averaging.
 def _is_measure(c: ColumnProfile) -> bool:
     return (c.kind == "number" and not c.primary_key
             and not re.search(r"(^id$|_id$|id$|zip|code|prefix|lat|lng|lon|year|seq|sequential|number$)",
                               c.name.lower()))
 
 
+# Ranks tables: those with dates and categories come first.
 def _table_score(t: TableProfile) -> tuple:
     has_date = any(c.kind == "date" for c in t.columns)
     has_cat = any(_is_category(c) for c in t.columns)
     return (has_date and has_cat, has_cat, has_date, t.row_count or 0)
 
 
+# Says 'total payment value' or 'average unit price' as fits the column.
 def _measure_phrase(measure: ColumnProfile) -> str:
     """'payment_value' -> 'total payment value', 'UnitPrice' -> 'average unit price'."""
     m = _words(measure.name)
@@ -63,6 +69,7 @@ def _measure_phrase(measure: ColumnProfile) -> str:
     return "total amount" if m == "total" else (m if m.startswith("total") else f"total {m}")
 
 
+# Builds 2-3 starter questions for a database from its profile.
 def suggestions_for(profile: SourceProfile) -> list[str]:
     # join columns (ShipVia, ReportsTo, customer_id ...) are links, not amounts
     keys = {(r.from_table, r.from_column) for r in profile.relationships} | \

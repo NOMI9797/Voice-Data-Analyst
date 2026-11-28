@@ -56,6 +56,7 @@ give list sort sorted only just about okay ok let let's look see tell want need 
 _vocab_cache: dict[int, set[str]] = {}
 
 
+# All words that appear in a source's names, descriptions and values.
 def _vocabulary(idx: "SourceIndex") -> set[str]:
     """Every word in the source's table/column names, descriptions and listed values."""
     key = id(idx)
@@ -68,6 +69,7 @@ def _vocabulary(idx: "SourceIndex") -> set[str]:
     return _vocab_cache[key]
 
 
+# True for word forms of the same word (delivery ~ delivered).
 def _same_stem(a: str, b: str) -> bool:
     """delivery ~ delivered, category ~ categories, brazil ~ brazilian (not order ~ ordinal)."""
     if a == b:
@@ -82,10 +84,12 @@ def _same_stem(a: str, b: str) -> bool:
     return n >= max(5, min(len(a), len(b)) - 3)
 
 
+# True when a word (or a form of it) appears in a source's vocabulary.
 def _in_vocabulary(word: str, vocab: set[str]) -> bool:
     return word in vocab or any(_same_stem(word, v) for v in vocab if v[:4] == word[:4])
 
 
+# Picks the subject words of a question (ignores 'average', 'per month', 'break it down').
 def _content_terms(question: str) -> list[str]:
     seen, out = set(), []
     for w in _tokens(question):
@@ -96,6 +100,7 @@ def _content_terms(question: str) -> list[str]:
     return out[:8]
 
 
+# Splits text into lowercase words without stopwords.
 def _tokens(s: str) -> list[str]:
     out = []
     for w in re.findall(r"[a-z0-9]+", _split_words(s)):
@@ -111,6 +116,7 @@ _model = None
 _model_lock = threading.Lock()
 
 
+# Loads the local bge-small embedding model (once).
 def _embedder():
     global _model
     with _model_lock:
@@ -122,6 +128,7 @@ def _embedder():
         return _model
 
 
+# Turns texts into number vectors with bge-small (local).
 def embed(texts: list[str], query: bool = False) -> np.ndarray:
     m = _embedder()
     vecs = list(m.query_embed(texts) if query else m.embed(texts))
@@ -129,6 +136,7 @@ def embed(texts: list[str], query: bool = False) -> np.ndarray:
     return arr / (np.linalg.norm(arr, axis=1, keepdims=True) + 1e-9)
 
 
+# Loads the embedding model at startup so the first question is fast.
 def warm_up() -> None:
     try:
         embed(["warm up"], query=True)
@@ -138,6 +146,7 @@ def warm_up() -> None:
 
 # ------------------------------------------------------------------ per-source index
 
+# The short text that describes one table for searching.
 def table_document(t: TableProfile) -> str:
     cols = []
     for c in t.columns:
@@ -155,6 +164,7 @@ def table_document(t: TableProfile) -> str:
     return doc
 
 
+# The short text that describes one column for searching.
 def column_document(t: TableProfile, c) -> str:
     doc = f"{_split_words(t.name)} {_split_words(c.name)}"
     if c.description:
@@ -162,6 +172,7 @@ def column_document(t: TableProfile, c) -> str:
     return doc
 
 
+# The search index of one database (vectors, keywords, values, join graph).
 @dataclass
 class SourceIndex:
     profile: SourceProfile
@@ -175,6 +186,7 @@ class SourceIndex:
     schema_words: set[str] = field(default_factory=set)
 
 
+# Builds the search index of one database from its profile.
 def _build_index(profile: SourceProfile) -> SourceIndex:
     names = [t.name for t in profile.tables]
     tdocs = [table_document(t) for t in profile.tables]
@@ -223,12 +235,14 @@ _indexes: dict[str, SourceIndex] = {}
 _index_lock = threading.Lock()
 
 
+# Forgets a source's index so it is rebuilt after re-profiling.
 def invalidate(source_id: str) -> None:
     _vocab_cache.clear()
     with _index_lock:
         _indexes.pop(source_id, None)
 
 
+# Returns a source's search index, building it the first time.
 def get_index(source_id: str) -> SourceIndex | None:
     with _index_lock:
         idx = _indexes.get(source_id)
@@ -243,6 +257,7 @@ def get_index(source_id: str) -> SourceIndex | None:
 
 # ------------------------------------------------------------------ retrieval
 
+# One table found for a question, with its scores.
 @dataclass
 class TableHit:
     source_id: str
@@ -255,6 +270,7 @@ class TableHit:
     bridge: bool = False
 
 
+# The result of a search: chosen source, tables, schema text and choices.
 @dataclass
 class Retrieval:
     question: str
@@ -271,6 +287,7 @@ class Retrieval:
     route_reason: str = ""
 
 
+# Finds words in the question that are real values in the data ('SP', 'delivered').
 def _value_hits(question: str, idx: SourceIndex) -> dict[str, list[str]]:
     words = re.findall(r"[a-z0-9']+", question.lower())
     found: dict[str, list[str]] = {}
@@ -282,6 +299,7 @@ def _value_hits(question: str, idx: SourceIndex) -> dict[str, list[str]]:
     return found
 
 
+# How strong a value match is (rare values count more).
 def _value_weight(match: str, idx: SourceIndex) -> float:
     """A question phrase equal to a real DB value is strong evidence, unless it is a
     generic word that also appears in the schema's own names (e.g. 'music', 'order')."""
@@ -291,6 +309,7 @@ def _value_weight(match: str, idx: SourceIndex) -> float:
     return 0.12 if (" " in phrase or len(phrase) >= 5) else 0.08
 
 
+# Adds the bridge tables needed to join the chosen tables.
 def _connect(selected: list[str], graph: dict[str, set[str]]) -> list[str]:
     """Add the fewest bridge tables so all selected tables are joinable."""
     if len(selected) < 2:
@@ -330,6 +349,7 @@ STICKY_MARGIN = 0.08
 STICKY_COVERAGE = 0.1
 
 
+# MAIN: scores every table of every active source, picks the source and the few tables that matter.
 def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: str | None = None,
              context: str = "") -> Retrieval:
     """context: the previous question, mixed into the search so a follow-up
@@ -467,6 +487,7 @@ def retrieve(question: str, source_ids: list[str] | None = None, prefer_source: 
 
 # ------------------------------------------------------------------ prompt rendering
 
+# Writes the chosen tables as the schema text sent to Gemini.
 def render_schema(profile: SourceProfile, tables: list[str]) -> str:
     """Compact, LLM-friendly schema for the selected tables only."""
     keep = set(tables)
@@ -518,6 +539,7 @@ def render_schema(profile: SourceProfile, tables: list[str]) -> str:
     return "\n".join(out)
 
 
+# After a clarification answer ('by spending'), adds the tables that answer talks about.
 def widen(r: Retrieval, extra_question: str, n: int = 2) -> Retrieval:
     """Adds the best tables for `extra_question` (searched on its own, same source) to a
     retrieval. Used when the user answers a clarification ("by money spent"): searched
@@ -546,6 +568,7 @@ def widen(r: Retrieval, extra_question: str, n: int = 2) -> Retrieval:
                         "schema_text": render_schema(idx.profile, names)})
 
 
+# During repair, adds real tables the SQL used but the search missed.
 def add_tables(r: Retrieval, names: list[str]) -> Retrieval:
     """Adds named tables of the same source (plus join paths) to a retrieval. Used by
     self repair: the SQL writer referred to a real table that retrieval had left out."""
@@ -565,6 +588,7 @@ def add_tables(r: Retrieval, names: list[str]) -> Retrieval:
     return Retrieval(**{**asdict(r), "tables": tables, "schema_text": render_schema(idx.profile, names_all)})
 
 
+# Finds which real tables a SQL query mentions.
 def tables_named_in(sql: str, source_id: str) -> list[str]:
     """Real tables of the source that the SQL mentions, matched case-insensitively and
     ignoring underscores/spaces ("order_details" -> "Order Details")."""
@@ -582,6 +606,7 @@ def tables_named_in(sql: str, source_id: str) -> list[str]:
     return out
 
 
+# Detects a question that only a switched-off source can answer.
 def switched_off_fit(question: str) -> dict | None:
     """Does the question name things that only a SWITCHED-OFF source has? ("payment type",
     "sellers" when only the music store and the trading data are on.) Returns that source

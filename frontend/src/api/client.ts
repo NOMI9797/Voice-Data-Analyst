@@ -21,6 +21,7 @@ export type Source = {
   error?: string | null;
 };
 
+// Calls a backend /api/... address and returns the JSON (or a readable error).
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, init);
   if (!res.ok) {
@@ -126,6 +127,7 @@ export type Turn = { question: string; sql: string; source_id: string };
 
 export type Suggestion = { source_id: string; source_name: string; question: string };
 
+// One function per backend endpoint: stt, correct, ask, tts, runSql, sources, suggestions...
 export const api = {
   suggestions: () => request<Suggestion[]>("/suggestions"),
   sttHint: () => request<{ hint: string }>("/correct/hint"),

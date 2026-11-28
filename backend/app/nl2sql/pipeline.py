@@ -40,6 +40,7 @@ HARD_STOP = {"write_operation", "not_select", "dangerous_function", "secret_colu
              "system_table", "table_function"}
 
 
+# The real tables and columns of a source (what the guard allows).
 def allowed_tables(source_id: str) -> dict[str, list[str]] | None:
     prof = get_store().get(source_id)
     if prof is None:
@@ -47,29 +48,35 @@ def allowed_tables(source_id: str) -> dict[str, list[str]] | None:
     return {t.name: [c.name for c in t.columns] for t in prof.tables}
 
 
+# Measures how long each step takes.
 class _Clock:
     def __init__(self):
         self.timings: dict[str, float] = {}
         self._t0 = time.perf_counter()
 
+    # Adds the time a step took.
     def lap(self, name: str, since: float) -> None:
         self.timings[name] = round(self.timings.get(name, 0) + (time.perf_counter() - since) * 1000, 1)
 
+    # Total time so far.
     def total(self) -> float:
         return round((time.perf_counter() - self._t0) * 1000, 1)
 
 
+# True when two SQL queries are the same (ignoring spaces).
 def _same_sql(a: str, b: str) -> bool:
     # whitespace only: case matters inside quoted values ('Delivered' vs 'delivered')
     norm = lambda q: re.sub(r"\s+", " ", q.strip().rstrip(";"))  # noqa: E731
     return norm(a) == norm(b)
 
 
+# The spoken 'which database do you mean?' question.
 def _spoken_choices(names: list[str]) -> str:
     listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
     return f"That could be about the {listed} data. Which one do you mean?"
 
 
+# The spoken clarifying question with its options said out loud.
 def _spoken_intent(question: str, options: list[str]) -> str:
     """'How should I rank them?' + options -> 'How should I rank them: by total spending, or by
     number of orders?' A listener can't see the buttons, so the options are said out loud."""
@@ -81,6 +88,7 @@ def _spoken_intent(question: str, options: list[str]) -> str:
     return f"{q}: {', '.join(opts[:-1])}, or {opts[-1]}?"
 
 
+# MAIN CONTROLLER: screen -> find tables/source -> write SQL -> check -> run -> repair -> chart -> facts -> spoken answer.
 def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] | None = None,
         pending: dict | None = None, speak: bool = True) -> dict:
     """pending: the clarification we asked last time:

@@ -12,6 +12,7 @@ from app.sources.registry import SourceError, get_registry
 router = APIRouter(tags=["schema"])
 
 
+# API: returns a source's profile.
 @router.get("/sources/{source_id}/profile")
 def get_profile(source_id: str, values: bool = False) -> dict:
     try:
@@ -31,6 +32,7 @@ def get_profile(source_id: str, values: bool = False) -> dict:
     return out
 
 
+# API: profiles a source again.
 @router.post("/sources/{source_id}/profile", status_code=202)
 def reprofile(source_id: str) -> dict:
     try:
@@ -41,11 +43,13 @@ def reprofile(source_id: str) -> dict:
     return {"status": "queued"}
 
 
+# A question for the table search.
 class RetrieveIn(BaseModel):
     question: str
     source_ids: list[str] | None = None
 
 
+# API: shows which tables a question would use (for testing).
 @router.post("/schema/retrieve")
 async def retrieve_schema(body: RetrieveIn) -> dict:
     if not body.question.strip():
@@ -54,6 +58,7 @@ async def retrieve_schema(body: RetrieveIn) -> dict:
     return asdict(r)
 
 
+# API: starter questions for the empty screen.
 @router.get("/suggestions")
 def suggestions() -> list[dict]:
     """Starter questions for an empty conversation, from the profiles of the active sources."""

@@ -33,6 +33,7 @@ SYSTEM = (
 )
 
 
+# Short text about one table (columns, samples) to send to the LLM.
 def _table_brief(t: TableProfile) -> str:
     lines = [f"TABLE {t.name} ({t.row_count} rows){' [view]' if t.is_view else ''}"]
     for c in t.columns:
@@ -45,6 +46,7 @@ def _table_brief(t: TableProfile) -> str:
     return "\n".join(lines)
 
 
+# When re-profiling, keeps the descriptions already written.
 def carry_over_descriptions(old: SourceProfile, new: SourceProfile) -> None:
     """Re-profiling keeps descriptions already written for tables/columns that still
     exist, so a flaky LLM can't erase earlier work and only new tables cost calls."""
@@ -60,6 +62,7 @@ def carry_over_descriptions(old: SourceProfile, new: SourceProfile) -> None:
             c.description = c.description or old_cols.get(c.name, "")
 
 
+# Asks Gemini for a plain-English line per table and column (6 tables per call, with retries).
 def describe_profile(profile: SourceProfile) -> SourceProfile:
     """Describes tables that have no description yet (all of them on a first run)."""
     source_desc = profile.description

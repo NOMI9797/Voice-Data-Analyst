@@ -25,6 +25,7 @@ type Series = { key: string; name: string };
 
 /** Rows -> recharts data. Values live under safe keys (v0, v1, ...) so column
  *  names with dots or spaces can't be misread as object paths. */
+// Turns result rows into the data format the chart library needs.
 function shape(spec: ChartSpec, columns: string[], rows: Cell[][]): { data: Point[]; series: Series[] } {
   const col = (name: string) => columns.indexOf(name);
   const xi = spec.x ? col(spec.x) : -1;
@@ -70,6 +71,7 @@ function shape(spec: ChartSpec, columns: string[], rows: Cell[][]): { data: Poin
   return { data, series };
 }
 
+// The big-number cards for a single result.
 function Kpis({ spec, columns, rows }: { spec: ChartSpec; columns: string[]; rows: Cell[][] }) {
   return (
     <div className="flex flex-wrap gap-3">
@@ -102,6 +104,7 @@ const tooltipProps = {
   labelStyle: { color: "#0b0b0b", fontWeight: 600 },
 };
 
+// MAIN: draws the line, bar or scatter chart (Recharts).
 export default function ChartView({
   spec,
   type,

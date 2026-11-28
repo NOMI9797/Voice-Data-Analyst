@@ -78,6 +78,7 @@ PRIVATE_PERSON_TABLE = re.compile(
     r"(customer|client|user|member|patient|contact|person|people|subscriber|guest|student|account)", re.I)
 
 
+# Whether SQL is allowed, the safe SQL, or the reason it was blocked.
 @dataclass
 class GuardResult:
     ok: bool
@@ -88,16 +89,19 @@ class GuardResult:
     limited: bool = False  # a LIMIT was added or lowered
 
 
+# Builds a 'blocked, because ...' result.
 def _reject(code: str, reason: str) -> GuardResult:
     return GuardResult(ok=False, code=code, reason=reason)
 
 
+# The name of a SQL function in the syntax tree.
 def _func_name(node: exp.Expression) -> str:
     if isinstance(node, exp.Anonymous):
         return str(node.name).lower()
     return type(node).__name__.lower()
 
 
+# All names a SQL function can be known by.
 def _sql_func_names(node: exp.Expression) -> set[str]:
     """All names a function node may be known by (class name, SQL name)."""
     names = {_func_name(node)}
@@ -108,12 +112,14 @@ def _sql_func_names(node: exp.Expression) -> set[str]:
     return names
 
 
+# Lowercase schema and table name of a table in the query.
 def _norm_table(t: exp.Table) -> tuple[str, str]:
     return (t.db or "").lower(), t.name.lower()
 
 
 # ---------------------------------------------------------------- main entry
 
+# MAIN: checks the SQL's syntax tree: read-only, one statement, known tables, no dangerous functions, no private data, adds LIMIT.
 def check_sql(
     sql: str,
     dialect: str,
@@ -210,12 +216,14 @@ def check_sql(
     return GuardResult(ok=True, sql=safe_sql, tables=sorted(set(used)), limited=limited)
 
 
+# The SELECTs whose results are actually returned.
 def _outer_selects(root: exp.Expression) -> list[exp.Select]:
     if isinstance(root, exp.SetOperation):
         return _outer_selects(root.left) + _outer_selects(root.right)
     return [root] if isinstance(root, exp.Select) else []
 
 
+# Finds customer-like name columns (but allows staff names).
 def _private_name_check(root: exp.Expression, allowed: dict[str, list[str]], used: list[str]):
     """Returns is_private(column) for person-name columns of customer-like tables. The
     column's table is resolved through its alias, so Employee.FirstName stays allowed
@@ -241,6 +249,7 @@ def _private_name_check(root: exp.Expression, allowed: dict[str, list[str]], use
     return is_private
 
 
+# Blocks listing private data (emails, phones, addresses, customer names).
 def _pii_in_output(root: exp.Expression, allowed: dict[str, list[str]], used: list[str]) -> str:
     """Reject raw personal-data values in the final output. Aggregates (COUNT(email)) are fine."""
     is_private_name = _private_name_check(root, allowed, used)

@@ -30,6 +30,7 @@ _DATE_TIME = re.compile(r"^(\d{4}-\d{2}-\d{2})[ T]00:00:00(\.0+)?([+-]\d{2}:?\d{
 _MONTH_START = re.compile(r"^(\d{4}-\d{2})-01$")
 
 
+# Makes values comparable (rounding, dates, text).
 def norm(v):
     if v is None:
         return None
@@ -49,6 +50,7 @@ def norm(v):
     return str(v)
 
 
+# Whether two results match (strict and lenient).
 @dataclass
 class Match:
     strict: bool
@@ -56,10 +58,12 @@ class Match:
     reason: str
 
 
+# Normalises all rows of a result.
 def _rows(rows: list[list]) -> list[tuple]:
     return [tuple(norm(v) for v in r) for r in rows]
 
 
+# Which app columns could stand for each correct-answer column.
 def _mappings(gold: list[tuple], pred: list[tuple], n_gold_cols: int, n_pred_cols: int):
     """Candidate gold-column -> pred-column mappings: a pred column qualifies when
     its multiset of values equals the gold column's."""
@@ -74,6 +78,7 @@ def _mappings(gold: list[tuple], pred: list[tuple], n_gold_cols: int, n_pred_col
     return options, None
 
 
+# True when both results have the same rows (any order, any column names).
 def same_rows(gold: list[tuple], pred: list[tuple], n_gold_cols: int, n_pred_cols: int) -> tuple[bool, str]:
     if len(gold) != len(pred):
         return False, f"{len(pred)} rows instead of {len(gold)}"
@@ -93,6 +98,7 @@ def same_rows(gold: list[tuple], pred: list[tuple], n_gold_cols: int, n_pred_col
     return False, "same column values but rows are paired differently"
 
 
+# MAIN: checks the app's result against the correct result.
 def compare(gold_cols: list[str], gold_rows: list[list], pred_cols: list[str], pred_rows: list[list]) -> Match:
     g, p = _rows(gold_rows), _rows(pred_rows)
     ok, why = same_rows(g, p, len(gold_cols), len(pred_cols))

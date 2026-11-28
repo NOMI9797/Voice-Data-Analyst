@@ -16,15 +16,18 @@ MONTHS = ["January", "February", "March", "April", "May", "June", "July", "Augus
           "November", "December"]
 
 
+# True for real numbers.
 def _num(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
+# Turns a column name into readable words.
 def human(name: str) -> str:
     words = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", name).replace("_", " ").strip().lower()
     return re.sub(r" name$", "", words)
 
 
+# Says a number the way a person would ('about 1.3 million').
 def say_number(v: float) -> str:
     """Rounded the way a person says it: 1,297 / 4.09 / about 1.3 million."""
     a = abs(v)
@@ -39,6 +42,7 @@ def say_number(v: float) -> str:
     return f"{v:,.2f}".rstrip("0").rstrip(".")
 
 
+# Says a date the way a person would ('November 2017').
 def say_time(v) -> str:
     """'2017-11-01' -> 'November 2017', '2017-11' -> 'November 2017', 2017 -> '2017'."""
     s = str(v)
@@ -48,15 +52,18 @@ def say_time(v) -> str:
     return re.sub(r"[ T]00:00:00.*$", "", s)
 
 
+# Percentage difference between two numbers, as text.
 def pct(a: float, b: float) -> str:
     return f"{abs(a - b) / abs(b) * 100:.0f}%" if b else ""
 
 
+# Pairs of (label, value) from two columns.
 def _pairs(columns, rows, x, y):
     xi, yi = columns.index(x), columns.index(y)
     return [(r[xi], r[yi]) for r in rows if _num(r[yi])]
 
 
+# MAIN: computes what is worth saying: peak vs average, trend, top item and share.
 def facts(columns: list[str], rows: list[list], chart: dict) -> list[str]:
     """Short factual sentences, most important first. Empty when nothing fits."""
     t, x, ys, series = chart.get("type"), chart.get("x"), chart.get("y") or [], chart.get("series")

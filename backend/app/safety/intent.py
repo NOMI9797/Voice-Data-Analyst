@@ -67,6 +67,7 @@ _RULES: list[tuple[str, str, re.Pattern]] = [
 ]
 
 
+# Whether a question is allowed, and the refusal message if not.
 @dataclass
 class IntentResult:
     allowed: bool
@@ -75,6 +76,7 @@ class IntentResult:
     matched: str = ""
 
 
+# MAIN: refuses clearly dangerous questions at once (delete, passwords, prompt injection...).
 def screen_question(question: str) -> IntentResult:
     q = " ".join((question or "").split())
     for category, message, pattern in _RULES:

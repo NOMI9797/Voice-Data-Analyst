@@ -7,6 +7,7 @@ from app.sources.registry import SourceError, check_connection, get_registry
 router = APIRouter(tags=["health"])
 
 
+# Checks whether one database answers.
 def _status() -> dict:
     s = get_settings()
     reg = get_registry()
@@ -25,6 +26,7 @@ def _status() -> dict:
     }
 
 
+# API /api/health: server, LLM key and database status (the green dots).
 @router.get("/health")
 async def health() -> dict:
     return await run_in_threadpool(_status)

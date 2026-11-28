@@ -53,6 +53,7 @@ did i we you our my their there please can could would should get find than then
 break down by month year week day quarter last next first total average sum count number""".split())
 
 
+# Lowercases text and removes accents and punctuation for fair comparison.
 def normalize(text: str) -> str:
     t = unicodedata.normalize("NFKD", text)
     t = "".join(c for c in t if not unicodedata.combining(c)).lower()
@@ -60,10 +61,12 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
+# Removes spaces so 'Sao Paulo' and 'saopaulo' compare equal.
 def _compact(s: str) -> str:
     return s.replace(" ", "")
 
 
+# The 'sound' key of a word (Metaphone), to match words that sound alike.
 def _phonetic(s: str) -> str:
     try:
         return "".join(jellyfish.metaphone(w) for w in s.split())
@@ -71,6 +74,7 @@ def _phonetic(s: str) -> str:
         return s
 
 
+# Turns words Whisper writes for symbols back into symbols.
 def _spoken_symbols(text: str) -> str:
     """Whisper writes some symbols as words."""
     t = re.sub(r"\bslash\b", "/", text, flags=re.I)
@@ -78,6 +82,7 @@ def _spoken_symbols(text: str) -> str:
     return t
 
 
+# One real database value, with its spelling and sound keys.
 @dataclass
 class VocabEntry:
     value: str  # original spelling from the database
@@ -89,6 +94,7 @@ class VocabEntry:
     popularity: float = 0.0  # 1.0 = most frequent value of its column, 0.0 = rarest
 
 
+# All real values of the active databases, ready for matching.
 @dataclass
 class Vocabulary:
     entries: list[VocabEntry]
@@ -98,6 +104,7 @@ class Vocabulary:
     built_ms: float
 
 
+# Picks the name-like and category columns whose values go into the word list.
 def _columns_for_vocab(profile: SourceProfile):
     for t in profile.tables:
         if t.is_view:
@@ -116,6 +123,7 @@ def _columns_for_vocab(profile: SourceProfile):
             yield t, c
 
 
+# Builds the word list of real values from the active databases.
 def build_vocabulary(source_ids: list[str]) -> Vocabulary:
     t0 = time.perf_counter()
     store, reg = get_store(), get_registry()
@@ -143,6 +151,7 @@ def build_vocabulary(source_ids: list[str]) -> Vocabulary:
                       round((time.perf_counter() - t0) * 1000, 1))
 
 
+# Builds a word list from given values (used in tests).
 def vocabulary_from_items(items: list[tuple[str, str, str]], source: str = "test") -> Vocabulary:
     """Build a vocabulary from (value, table, column) items, in frequency order per column."""
     by_norm: dict[str, VocabEntry] = {}
@@ -168,6 +177,7 @@ _vocab_key: tuple = ()
 _lock = threading.Lock()
 
 
+# Returns the word list for the active databases (cached).
 def get_vocabulary() -> Vocabulary:
     """Cached vocabulary for the currently active, profiled sources."""
     global _vocab, _vocab_key
@@ -182,6 +192,7 @@ def get_vocabulary() -> Vocabulary:
         return _vocab
 
 
+# Forgets the word list so it is rebuilt when sources change.
 def invalidate(_source_id: str | None = None) -> None:
     global _vocab
     with _lock:
@@ -190,6 +201,7 @@ def invalidate(_source_id: str | None = None) -> None:
 
 # ------------------------------------------------------------------ correction
 
+# One fix: the misheard words, the real value, and the scores.
 @dataclass
 class Correction:
     original: str
@@ -203,6 +215,7 @@ class Correction:
     end: int = 0
 
 
+# The corrected sentence, the fixes made, and the names recognised.
 @dataclass
 class CorrectionResult:
     original: str
@@ -213,18 +226,22 @@ class CorrectionResult:
     ms: float
 
 
+# Removes punctuation around a word.
 def _strip_punct(s: str) -> str:
     return re.sub(r"[?.!,;:]+$", "", s)
 
 
+# True for ordinary English words, which are never 'corrected'.
 def _is_common(word: str) -> bool:
     return word in _STOPWORDS or zipf_frequency(word, "en") >= COMMON_ZIPF
 
 
+# Where a value lives (source, table, column).
 def _locs(e: VocabEntry) -> list[dict]:
     return [{"source_id": s, "source": n, "table": t, "column": c} for s, n, t, c in e.locations]
 
 
+# MAIN: fixes misheard names by comparing the sentence with real database values (spelling + sound).
 def correct(text: str, vocab: Vocabulary | None = None) -> CorrectionResult:
     t0 = time.perf_counter()
     vocab = vocab or get_vocabulary()
@@ -370,6 +387,7 @@ def correct(text: str, vocab: Vocabulary | None = None) -> CorrectionResult:
     )
 
 
+# List of real names for Whisper's prompt (built, but not used in the app any more).
 def whisper_hint(max_chars: int = 500) -> str:
     """Short list of real database names to bias Whisper toward them.
     Prefers values from small lookup columns (categories, genres, states, cities)."""

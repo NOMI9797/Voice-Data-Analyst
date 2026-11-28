@@ -13,11 +13,13 @@ from app.viz.chart import choose_chart
 router = APIRouter(tags=["query"])
 
 
+# SQL to run on a source.
 class SQLIn(BaseModel):
     source_id: str
     sql: str
 
 
+# The real tables of a source, or an error if it is not profiled yet.
 def allowed_tables(source_id: str) -> dict[str, list[str]]:
     tables = profiled_tables(source_id)
     if tables is None:
@@ -25,6 +27,7 @@ def allowed_tables(source_id: str) -> dict[str, list[str]]:
     return tables
 
 
+# API /api/sql/run: runs edited SQL through the guard and the read-only executor.
 @router.post("/sql/run")
 async def run_sql(body: SQLIn) -> dict:
     """Run SQL through the safety guard and the read-only executor."""
@@ -46,10 +49,12 @@ async def run_sql(body: SQLIn) -> dict:
             "chart": choose_chart(result["columns"], result["rows"])}
 
 
+# A question to screen.
 class QuestionIn(BaseModel):
     question: str
 
 
+# API: checks a question with the safety screen (for testing).
 @router.post("/safety/screen")
 def screen(body: QuestionIn) -> dict:
     r = screen_question(body.question)

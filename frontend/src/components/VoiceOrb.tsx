@@ -4,6 +4,7 @@
 
 export type Phase = "idle" | "listening" | "transcribing" | "correcting" | "thinking" | "speaking";
 
+// The text under the mic button ('Listening...', 'Writing and checking the query...').
 export function phaseLabel(phase: Phase, userSpeaking: boolean): string {
   switch (phase) {
     case "listening":
@@ -23,6 +24,7 @@ export function phaseLabel(phase: Phase, userSpeaking: boolean): string {
 
 const MIC = "M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z";
 
+// The animated mic button: idle, listening, thinking, speaking.
 export default function VoiceOrb({ phase, level, onClick, size = 56 }: {
   phase: Phase;
   level: number; // 0..1 microphone level while listening

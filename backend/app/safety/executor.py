@@ -21,10 +21,12 @@ from app.config import get_settings
 from app.sources.registry import get_registry
 
 
+# A database error, with the database's own message (sent back for repair).
 class QueryError(RuntimeError):
     """Database error, with the engine's own message (fed back to the LLM for repair)."""
 
 
+# Converts dates, decimals and bytes into values the browser can show.
 def _json_value(v):
     if v is None or isinstance(v, (bool, int, str)):
         return v
@@ -43,6 +45,7 @@ def _json_value(v):
     return str(v)
 
 
+# MAIN: runs SQL read-only with a time limit per engine, returns at most 1,000 rows.
 def run_query(source_id: str, sql: str, row_limit: int | None = None,
               timeout_s: int | None = None) -> dict:
     s = get_settings()

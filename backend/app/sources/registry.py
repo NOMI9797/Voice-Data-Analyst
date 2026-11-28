@@ -38,6 +38,7 @@ SYSTEM_SCHEMAS = {
 }
 
 
+# One connected database: name, engine, address or file, and its on/off switch.
 @dataclass
 class Source:
     id: str
@@ -48,10 +49,12 @@ class Source:
     active: bool = True
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+    # The SQL dialect name for this engine (postgres, mysql, sqlite, duckdb).
     @property
     def dialect(self) -> str:
         return SQLGLOT_DIALECT[self.engine]
 
+    # Safe version for the browser: password hidden, file paths shortened.
     def public(self) -> dict:
         """Safe-to-show representation (password masked, file paths shortened)."""
         u = make_url(self.url)
@@ -72,17 +75,20 @@ class Source:
         }
 
 
+# A user-facing problem with a source (bad address, unreachable, bad file).
 class SourceError(ValueError):
     """User-facing error (bad URL, unreachable DB, bad file...)."""
 
 
 # ---------------------------------------------------------------- URL handling
 
+# Turns a sqlite/duckdb URL into the file path on disk.
 def _db_file_path(url: str) -> str:
     db = make_url(url).database or ""
     return db[len("file:"):] if db.startswith("file:") else db
 
 
+# Cleans a pasted connection string and works out which engine it is.
 def normalize_url(raw: str) -> tuple[str, str]:
     """Turn a user-typed connection string into (sqlalchemy_url, engine_name)."""
     raw = raw.strip()
@@ -122,6 +128,7 @@ def normalize_url(raw: str) -> tuple[str, str]:
     return url.render_as_string(hide_password=False), backend
 
 
+# Opens the database connection in READ-ONLY mode for its engine.
 def build_engine(url: str, engine_name: str) -> Engine:
     timeout_s = get_settings().query_timeout_seconds
     if engine_name == "postgresql":
@@ -154,6 +161,7 @@ def build_engine(url: str, engine_name: str) -> Engine:
     raise SourceError(f"Unsupported engine {engine_name}")
 
 
+# Lists all tables and views in a database.
 def list_tables(eng: Engine) -> list[str]:
     """Tables + views in all user schemas. Non-default schemas are prefixed."""
     if eng.dialect.name == "duckdb":
@@ -176,6 +184,7 @@ def list_tables(eng: Engine) -> list[str]:
     return names
 
 
+# Tests that a new connection works before it is saved.
 def check_connection(eng: Engine) -> list[str]:
     try:
         with eng.connect() as conn:
@@ -191,11 +200,13 @@ def check_connection(eng: Engine) -> list[str]:
 _SAFE = re.compile(r"[^a-z0-9_]+")
 
 
+# Makes a safe table name from a file name.
 def safe_identifier(name: str) -> str:
     stem = _SAFE.sub("_", Path(name).stem.lower()).strip("_") or "table"
     return stem if not stem[0].isdigit() else f"t_{stem}"
 
 
+# Loads uploaded CSV files into a new DuckDB file, one table per CSV.
 def csvs_to_duckdb(csv_paths: list[Path], db_path: Path) -> list[str]:
     """Load each CSV as one table in a new DuckDB file. Returns table names."""
     import duckdb
@@ -224,6 +235,7 @@ def csvs_to_duckdb(csv_paths: list[Path], db_path: Path) -> list[str]:
 
 # ---------------------------------------------------------------- registry
 
+# The list of all connected databases, saved to disk.
 class SourceRegistry:
     def __init__(self, data_dir: str):
         self.data_dir = Path(data_dir)
@@ -235,18 +247,21 @@ class SourceRegistry:
         self._load()
 
     # ---- persistence
+    # Reads the saved list of sources from disk.
     def _load(self) -> None:
         if self.file.exists():
             for d in json.loads(self.file.read_text()):
                 s = Source(**d)
                 self._sources[s.id] = s
 
+    # Writes the list of sources to disk.
     def _save(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         tmp = self.file.with_suffix(".tmp")
         tmp.write_text(json.dumps([asdict(s) for s in self._sources.values()], indent=2))
         tmp.replace(self.file)
 
+    # Adds the three demo databases on the very first start.
     def seed_builtins(self, builtins: list[tuple[str, str]]) -> None:
         """Register demo sources once (first start only), so a user's removals stick."""
         if self.file.exists():
@@ -261,18 +276,22 @@ class SourceRegistry:
         self._save()
 
     # ---- queries
+    # All sources, switched on or off.
     def list(self) -> list[Source]:
         return sorted(self._sources.values(), key=lambda s: s.created_at)
 
+    # Only the sources that are switched on.
     def active(self) -> list[Source]:
         return [s for s in self.list() if s.active]
 
+    # Finds one source by its id.
     def get(self, source_id: str) -> Source:
         try:
             return self._sources[source_id]
         except KeyError:
             raise SourceError(f"Unknown source {source_id}") from None
 
+    # Gives the read-only connection for a source (cached).
     def engine(self, source_id: str) -> Engine:
         with self._lock:
             if source_id not in self._engines:
@@ -280,10 +299,12 @@ class SourceRegistry:
                 self._engines[source_id] = build_engine(s.url, s.engine)
             return self._engines[source_id]
 
+    # Lists the tables of one source.
     def tables(self, source_id: str) -> list[str]:
         return check_connection(self.engine(source_id))
 
     # ---- mutations
+    # Checks a new source and adds it to the list.
     def _register(self, name: str, url: str, engine_name: str, origin: str,
                   verify: bool = True, source_id: str | None = None) -> Source:
         sid = source_id or uuid.uuid4().hex[:8]
@@ -301,6 +322,7 @@ class SourceRegistry:
             self._save()
         return s
 
+    # Adds a database from a connection string.
     def add_connection(self, name: str, raw_url: str, origin: str = "connection",
                        verify: bool = True) -> Source:
         url, engine_name = normalize_url(raw_url)
@@ -309,6 +331,7 @@ class SourceRegistry:
                 raise SourceError(f"This database is already connected as '{existing.name}'.")
         return self._register(name, url, engine_name, origin, verify)
 
+    # Adds an uploaded SQLite file as a source.
     def add_sqlite_upload(self, name: str, filename: str, data_path: Path) -> Source:
         with open(data_path, "rb") as f:
             if f.read(16) != b"SQLite format 3\x00":
@@ -325,6 +348,7 @@ class SourceRegistry:
             shutil.rmtree(dest_dir, ignore_errors=True)
             raise
 
+    # Adds uploaded CSV files as a source (via DuckDB).
     def add_csv_upload(self, name: str, files: list[tuple[str, Path]]) -> Source:
         sid = uuid.uuid4().hex[:8]
         dest_dir = self.uploads_dir / sid
@@ -344,6 +368,7 @@ class SourceRegistry:
             shutil.rmtree(dest_dir, ignore_errors=True)
             raise
 
+    # The on/off switch for a source.
     def set_active(self, source_id: str, active: bool) -> Source:
         with self._lock:
             s = self.get(source_id)
@@ -351,6 +376,7 @@ class SourceRegistry:
             self._save()
         return s
 
+    # Renames a source.
     def rename(self, source_id: str, name: str) -> Source:
         with self._lock:
             s = self.get(source_id)
@@ -358,6 +384,7 @@ class SourceRegistry:
             self._save()
         return s
 
+    # Removes a source (and its uploaded file).
     def remove(self, source_id: str) -> None:
         with self._lock:
             s = self.get(source_id)
@@ -373,6 +400,7 @@ class SourceRegistry:
 _registry: SourceRegistry | None = None
 
 
+# Gives every file the same SourceRegistry (created once).
 def get_registry() -> SourceRegistry:
     global _registry
     if _registry is None:

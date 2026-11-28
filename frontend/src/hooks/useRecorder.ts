@@ -45,12 +45,14 @@ class Capture extends AudioWorkletProcessor {
 registerProcessor("capture", Capture);
 `;
 
+// Loudness of a chunk of audio (used to tell speech from silence).
 function rms(x: Float32Array): number {
   let s = 0;
   for (let i = 0; i < x.length; i++) s += x[i] * x[i];
   return Math.sqrt(s / x.length);
 }
 
+// Converts the microphone's audio to 16 kHz for Whisper.
 function resample(input: Float32Array, from: number, to: number): Float32Array {
   if (from === to) return input;
   const ratio = from / to;
@@ -66,6 +68,7 @@ function resample(input: Float32Array, from: number, to: number): Float32Array {
   return out;
 }
 
+// Packs the audio into a WAV file to send to the backend.
 function encodeWav(samples: Float32Array, rate: number): Blob {
   const buf = new ArrayBuffer(44 + samples.length * 2);
   const v = new DataView(buf);
@@ -90,6 +93,7 @@ function encodeWav(samples: Float32Array, rate: number): Blob {
   return new Blob([buf], { type: "audio/wav" });
 }
 
+// MAIN: records the microphone and stops by itself after 1.1 s of silence.
 export function useRecorder({ silenceMs = 1100, maxMs = 20000, noSpeechTimeoutMs = 7000, onRecording }: Options) {
   const [state, setStateRaw] = useState<RecorderState>("idle");
   // the ref mirrors the state so start() works from stale closures (e.g. auto-listen after speech)
@@ -110,6 +114,7 @@ export function useRecorder({ silenceMs = 1100, maxMs = 20000, noSpeechTimeoutMs
   const cbRef = useRef(onRecording);
   cbRef.current = onRecording;
 
+  // Turns the microphone off and frees it.
   const cleanup = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -119,6 +124,7 @@ export function useRecorder({ silenceMs = 1100, maxMs = 20000, noSpeechTimeoutMs
     setSpeaking(false);
   }, []);
 
+  // Ends the recording: cuts out the speech, makes the WAV, hands it over.
   const finish = useCallback(() => {
     if (stoppingRef.current) return;
     stoppingRef.current = true;
@@ -156,6 +162,7 @@ export function useRecorder({ silenceMs = 1100, maxMs = 20000, noSpeechTimeoutMs
     });
   }, [cleanup, setState]);
 
+  // Starts listening: measures room noise, then detects speech and silence.
   const start = useCallback(async () => {
     if (stateRef.current !== "idle") return;
     stateRef.current = "listening"; // claim it now: a second start() during getUserMedia is ignored
@@ -223,9 +230,12 @@ export function useRecorder({ silenceMs = 1100, maxMs = 20000, noSpeechTimeoutMs
     }
   }, [silenceMs, maxMs, noSpeechTimeoutMs, finish, cleanup, setState]);
 
+  // Stops recording now and sends what was said.
   const stop = useCallback(() => finish(), [finish]);
+  // Back to idle after the audio was handled.
   const done = useCallback(() => setState("idle"), [setState]);
   /** Stop listening and throw the recording away (e.g. the user clicked an option instead). */
+  // Stops recording and throws the audio away (e.g. a button was clicked instead).
   const cancel = useCallback(() => {
     if (stateRef.current !== "listening") return;
     stoppingRef.current = true;
