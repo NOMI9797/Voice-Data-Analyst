@@ -24,7 +24,8 @@ _RULES: list[tuple[str, str, re.Pattern]] = [
          r"|\b(insert|add|create)\b.{0,25}\b(new\s+)?(row|record|table|user|entry|column|index)s?\b.{0,25}\b(into|in|to|called|named)\b"
          r"|\b(drop|truncate|alter)\s+(table|database|schema|column|index|view)\b"
          r"|\b(grant|revoke)\b.{0,30}\b(access|privilege|permission|admin|role)s?\b"
-         r"|\bremove\s+(all|every)\b",
+         r"|\bremove\s+(all|every)\b"
+         r"|\b(delete|drop|remove|erase|wipe|destroy|truncate|update|modify|overwrite)\s+(them|it|those|these|everything)\b",
          re.I)),
     ("prompt_injection",
      "I can't follow instructions that try to change how I work. Please ask a question about the data.",

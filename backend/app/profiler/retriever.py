@@ -50,7 +50,9 @@ biggest longest shortest common often usually share percent percentage rate rati
 there have has had our us value time times duration period month months monthly year years yearly
 day days daily week weeks weekly quarter quarters hour hours minute minutes
 now break broken breakdown down split group grouped same again instead also then compare show display
-give list sort sorted only just about okay ok let let's look see tell want need could would""".split())
+give list sort sorted only just about okay ok let let's look see tell want need could would
+than more less fewer over under above longer shorter greater bigger smaller larger higher lower
+before after between least exceed exceeds exceeding""".split())
 
 
 _vocab_cache: dict[int, set[str]] = {}

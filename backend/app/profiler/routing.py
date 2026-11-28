@@ -22,6 +22,9 @@ from dataclasses import dataclass
 COVERAGE_DELTA = 0.05
 SCORE_MARGIN = 0.15
 MAX_CHOICES = 3
+# A tie where even the best table matches this weakly is not about the data at all
+# ("tell me a joke": best 0.44; the lowest real question in our datasets: 0.51).
+OFF_TOPIC_SCORE = 0.47
 
 
 # Which source was chosen (or none = ask the user), and why.

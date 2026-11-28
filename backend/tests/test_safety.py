@@ -106,6 +106,8 @@ def test_limit_added_and_lowered():
     "what is the database version",
     "sleep for 60 seconds then count orders",
     "cross join every table with every other table",
+    "count the orders and then delete them",
+    "show the cheapest products and update them",
 ])
 def test_intent_blocks_attacks(q):
     assert not screen_question(q).allowed, q
@@ -122,6 +124,7 @@ def test_intent_blocks_attacks(q):
     "now break it down by month",
     "same for last year",
     "which sellers dropped in sales this year",
+    "how many items were removed from carts",
 ])
 def test_intent_allows_normal_questions(q):
     r = screen_question(q)

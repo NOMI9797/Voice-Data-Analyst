@@ -22,7 +22,7 @@ from app.nl2sql.sanity import suspicious
 from app.nl2sql.answer import spoken_answer, template_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
 from app.profiler.retriever import add_tables, retrieve, switched_off_fit, tables_named_in, widen
-from app.profiler.routing import resolve_choice, resolve_intent_reply
+from app.profiler.routing import OFF_TOPIC_SCORE, resolve_choice, resolve_intent_reply
 from app.profiler.store import get_store
 from app.safety.executor import QueryError, run_query
 from app.safety.guard import check_sql
@@ -74,6 +74,21 @@ def _same_sql(a: str, b: str) -> bool:
 def _spoken_choices(names: list[str]) -> str:
     listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
     return f"That could be about the {listed} data. Which one do you mean?"
+
+
+# Finds a database the user named in the question ('on Olist').
+def _named_source(question: str) -> str | None:
+    """'... on Olist', 'in the Chinook data': the user named a database. Returns its id when
+    exactly one source's distinctive first name word appears (not common words like 'test')."""
+    from wordfreq import zipf_frequency
+
+    words = set(re.findall(r"[a-z0-9]+", question.lower()))
+    hits = []
+    for s in get_registry().list():
+        name = re.findall(r"[a-z0-9]+", s.name.lower())
+        if name and len(name[0]) >= 4 and zipf_frequency(name[0], "en") < 3.0 and name[0] in words:
+            hits.append(s.id)
+    return hits[0] if len(hits) == 1 else None
 
 
 # The spoken clarifying question with its options said out loud.
@@ -134,7 +149,10 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
     if not llm.available():
         return done("failed", "The language model key is not set, so I can't answer questions yet.")
 
-    # 2. retrieve
+    # 2. retrieve (a database the user named, "... on Olist", is used directly)
+    if source_ids is None and (named := _named_source(question)):
+        source_ids = [named]
+        out["named_source"] = named
     hist = (history or [])[-3:]
     prev = hist[-1] if hist else None
     t = time.perf_counter()
@@ -147,7 +165,21 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         off = [s.name for s in get_registry().list() if source_ids and s.id in source_ids and not s.active]
         if off:
             return done("no_source", f"The {off[0]} data is switched off. Turn it on under Your data to ask it.")
+        busy = [s.name for s in get_registry().active() if not source_ids or s.id in source_ids]
+        if busy:  # switched on, but its analysis (run once after connecting) hasn't finished yet
+            return done("not_ready", f"The {busy[0]} data is still being analysed. Try again in a moment.")
         return done("no_source", "No data source is switched on. Turn one on under Your data first.")
+    if r.choices and source_ids is None:
+        # a tie among the active sources, but the words fit a switched-off one: say so
+        off = switched_off_fit(question)
+        if off:
+            out["switched_off_source"] = off
+            return done("cannot_answer", f"That isn't in the data that's switched on. It looks like it's in the "
+                                         f"{off['name']} data, which is switched off. Turn it on under Your data to ask it.")
+    if r.choices and max((sc["score"] for sc in r.source_scores), default=1.0) < OFF_TOPIC_SCORE:
+        # nothing matches well anywhere: not a question about the data ("tell me a joke")
+        return done("cannot_answer", "I can only answer questions about the data that's connected, "
+                                     "such as orders, customers, products or sales.")
     if r.choices:
         # Several sources fit about equally well: ask by voice rather than guess (the brief:
         # "ask for clarification instead of guessing"). Only real ties get here, and the

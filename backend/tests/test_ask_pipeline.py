@@ -122,7 +122,16 @@ def test_llm_down_gives_spoken_failure(env, monkeypatch):
 
 def test_no_active_source(env, monkeypatch):
     monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(source_id=None, choices=[]))
+    monkeypatch.setattr(pipeline, "get_registry", lambda: SimpleNamespace(list=lambda: [], active=lambda: []))
     assert pipeline.ask("how many orders")["status"] == "no_source"
+
+
+def test_source_still_being_analysed(env, monkeypatch):
+    monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(source_id=None, choices=[]))
+    new = SimpleNamespace(id="csv1", name="Shop sales", active=True)
+    monkeypatch.setattr(pipeline, "get_registry", lambda: SimpleNamespace(list=lambda: [new], active=lambda: [new]))
+    out = pipeline.ask("which region sells most")
+    assert out["status"] == "not_ready" and "still being analysed" in out["answer"]
 
 
 @pytest.mark.parametrize("raw,sql", [
@@ -189,6 +198,24 @@ def test_close_call_asks_which_source_without_llm(env, monkeypatch):
     assert out["status"] == "clarify" and out["clarify"]["kind"] == "source"
     assert out["answer"] == "That could be about the Olist e-commerce or Chinook music store data. Which one do you mean?"
     assert env["gen"] == [] and not env["ran"]  # no LLM call, no query
+
+
+def test_off_topic_tie_is_not_asked_about(env, monkeypatch):
+    weak = [{"source_id": "olist", "name": "Olist e-commerce", "score": 0.42, "coverage": 0.6},
+            {"source_id": "chinook", "name": "Chinook music store", "score": 0.41, "coverage": 0.6}]
+    monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(
+        **{**RETRIEVAL, "choices": OPTIONS, "source_scores": weak}, question=q))
+    out = pipeline.ask("tell me a joke")
+    assert out["status"] == "cannot_answer" and "only answer questions about the data" in out["answer"]
+
+
+def test_tie_that_fits_a_switched_off_source_says_so(env, monkeypatch):
+    monkeypatch.setattr(pipeline, "retrieve", lambda q, ids=None, **kw: SimpleNamespace(
+        **{**RETRIEVAL, "choices": OPTIONS}, question=q))
+    monkeypatch.setattr(pipeline, "switched_off_fit",
+                        lambda q: {"source_id": "olist", "name": "Olist e-commerce", "words": ["payment"]})
+    out = pipeline.ask("which payment type is used most often")
+    assert out["status"] == "cannot_answer" and "Olist e-commerce data, which is switched off" in out["answer"]
 
 
 def test_reply_to_clarification_answers_original_question(env, monkeypatch):
