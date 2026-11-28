@@ -43,6 +43,10 @@ log = logging.getLogger(__name__)
 MAX_NGRAM = 4
 ACCEPT = 86.0  # includes up to +3 popularity prior  # combined score (0-100) needed to replace a span
 COMMON_ZIPF = 4.2  # words at least this frequent in English are protected
+# A single non-English word that sounds exactly like one unique value may be corrected
+# with looser spelling ("kirtaba" -> Curitiba: spelled 53% alike, sounds identical).
+SOUND_TWIN_SPELLING = 50.0
+NOT_A_WORD_ZIPF = 1.0
 AMBIGUOUS_GAP = 2.0  # two different values within this score -> ambiguous
 SKIP_COLUMN = re.compile(r"(comment|message|description|desc$|note|review_text|body|title$|url|path|photo|"
                          r"phone|fax|e_?mail|zip|postal|cep|address|street|password|token|hash)", re.I)
@@ -241,6 +245,16 @@ def _locs(e: VocabEntry) -> list[dict]:
     return [{"source_id": s, "source": n, "table": t, "column": c} for s, n, t, c in e.locations]
 
 
+# The single value a non-English word sounds exactly like, if no other value sounds the same.
+def _sound_twin(phon: str, twins: list, vocab: Vocabulary):
+    names = {t[3].norm for t in twins}
+    if len(names) != 1:
+        return None
+    # "only one" across the whole vocabulary, not just the few candidates looked at
+    same_sound = {vocab.entries[k].norm for k, p in enumerate(vocab.phons) if p == phon}
+    return max(twins, key=lambda t: t[0]) if len(same_sound) == 1 else None
+
+
 # MAIN: fixes misheard names by comparing the sentence with real database values (spelling + sound).
 def correct(text: str, vocab: Vocabulary | None = None) -> CorrectionResult:
     t0 = time.perf_counter()
@@ -291,6 +305,7 @@ def correct(text: str, vocab: Vocabulary | None = None) -> CorrectionResult:
             for _, _, idx in process.extract(phon, vocab.phons, scorer=fuzz.ratio, limit=6, score_cutoff=70):
                 cands[idx] = None
             scored = []
+            twins: list[tuple[float, float, float, VocabEntry]] = []
             for idx in cands:
                 e = vocab.entries[idx]
                 if abs(e.n_words - n) > 2:
@@ -313,17 +328,22 @@ def correct(text: str, vocab: Vocabulary | None = None) -> CorrectionResult:
                 # one word changed on sound alone is too risky ("aussie" -> the city "assai"):
                 # it must also be spelled fairly alike
                 if n == 1 and spelling < 75:
+                    if (sound == 100 and spelling >= SOUND_TWIN_SPELLING and len(compact) >= 6
+                            and e.n_words == 1 and zipf_frequency(span_words[0], "en") < NOT_A_WORD_ZIPF):
+                        twins.append((score, spelling, sound, e))
                     continue
                 # a single common English word may only become a value that sounds identical
                 if n == 1 and _is_common(span_words[0]) and (sound < 100 or spelling < 75):
                     continue
                 scored.append((score, spelling, sound, e))
-            if not scored:
-                continue
             scored.sort(key=lambda x: x[0], reverse=True)
+            if not scored or scored[0][0] < ACCEPT:
+                # last chance: it sounds exactly like one value, and only one value sounds like that
+                twin = _sound_twin(phon, twins, vocab)
+                if twin is None:
+                    continue
+                scored = [twin]
             best = scored[0]
-            if best[0] < ACCEPT:
-                continue
             alts = [x[3].value for x in scored[1:4]
                     if best[0] - x[0] <= AMBIGUOUS_GAP and x[3].norm != best[3].norm]
             found.append(Correction(

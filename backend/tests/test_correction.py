@@ -75,3 +75,18 @@ def test_words_next_to_a_name_are_kept(text):
 def test_whisper_loop_detection(text, looped):
     from app.stt.whisper import looks_looped
     assert looks_looped(text, []) is looped
+
+
+def test_word_that_sounds_exactly_like_one_value_is_fixed():
+    # spelled only 53% alike, but sounds identical (KRTB) and only Curitiba sounds like that
+    assert correct("how many orders were from kirtaba", VOCAB).corrected == "how many orders were from curitiba"
+
+
+def test_sound_alone_never_changes_an_english_word():
+    v = vocabulary_from_items([("assai", "customers", "customer_city"), ("curitiba", "customers", "customer_city")])
+    assert correct("which aussie customers spent most", v).corrected == "which aussie customers spent most"
+
+
+def test_sound_alone_never_picks_between_two_values_that_sound_the_same():
+    v = vocabulary_from_items([("curitiba", "customers", "customer_city"), ("cortiba", "customers", "customer_city")])
+    assert correct("orders from kirtaba", v).corrected == "orders from kirtaba"
