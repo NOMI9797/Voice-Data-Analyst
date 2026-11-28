@@ -350,7 +350,7 @@ The real-world gap is a system that works on an **unseen** database from a conne
 
 | Trade-off | Choice | Reason |
 |---|---|---|
-| Speech accuracy vs. speed | Whisper `base.en` (0.7 s) instead of `small.en` | A larger model roughly triples transcription time on a CPU. The corrector recovers many misheard names, and `small.en` is one setting away for users with faster hardware. |
+| Speech accuracy vs. speed | Whisper `base.en` (0.6 s per question) instead of `small.en` (1.7 s) | Measured on our 41 test names: `small.en` got 73% right after correction against 61–66% for `base.en`, but added about 1.1 s to every question. The corrector recovers many misheard names, and `small.en` is one setting away (`WHISPER_MODEL=small.en`) for users who value accuracy over speed. |
 | Asking vs. guessing | Ask only when the answer would change and there is no sensible default; never twice | Asking every time is unusable, and guessing gives confident wrong answers. Measured: 5/5 vague questions asked, 0/36 clear ones. |
 | Source routing: asking vs. answering at once | Ask only on genuine ties, remember the choice for the conversation | Asking on every overlap frustrated users in testing; answering from a guess breaks the brief and risks a confident wrong answer. Result: 0 wrong picks, 12/14 ties asked, 4/34 clear questions asked, at most once per topic. |
 | Latency vs. answer quality | LLM wording of the answer, with a 6 s deadline and computed facts | The LLM sounds natural but is sometimes slow; computed facts make its numbers correct, and the deadline keeps the conversation moving. |
@@ -367,7 +367,7 @@ The real-world gap is a system that works on an **unseen** database from a conne
 - **Over-trust and accountability.** A confident spoken answer can be wrong (89–97% accuracy in our tests means some answers are wrong). The system shows the SQL, states its assumptions, says when data may be incomplete, and asks when it is unsure, but decisions should not rest on an unchecked voice answer. Responsibility for decisions stays with the people who make them.
 - **Fairness and accessibility.** The English-only speech model performs worse on some accents and non-native speakers, who would then get more wrong or "I didn't catch that" answers. Name correction against real values partly compensates. On the positive side, voice access opens data analysis to people with limited literacy in SQL, visual impairments or limited mobility.
 - **Employment.** Tools like this reduce routine reporting work for analysts and shift them toward checking, data quality and interpretation. That is a benefit for organizations and a change in skills required for analysts.
-- **Legal.** Read-only access, logging of the SQL that was run, and refusal of data changes help organizations stay within their own access policies, but the system inherits whatever permissions its database user has. It should always be connected with a dedicated read-only user restricted to the data the speaker is allowed to see.
+- **Legal.** Read-only access, showing the SQL that was run, and refusal of data changes help organizations stay within their own access policies, but the system inherits whatever permissions its database user has. It should always be connected with a dedicated read-only user restricted to the data the speaker is allowed to see.
 
 ---
 
