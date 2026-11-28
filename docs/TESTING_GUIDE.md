@@ -66,6 +66,8 @@ Type these *wrong* spellings (they imitate what speech recognition gets wrong). 
 
 The question fits two or three databases equally, so the app asks and then **listens automatically** for your reply.
 
+**Ask these at the start of a conversation (refresh the page first).** Mid-conversation, a question that fits the database you are already using is answered from that database, e.g. "how many customers are there" right after a Chinook question gives Chinook's **59**.
+
 | Question | Expected question back | Reply | Expected answer |
 |---|---|---|---|
 | how many orders were placed in 2017 | "Northwind trading or Olist e-commerce?" | "Olist" | **45,101** orders |
