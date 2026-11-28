@@ -92,6 +92,8 @@ The question fits two or three databases equally, so the app asks and then **lis
 | how many orders were placed each month in 2017 **on olist** | Answers from Olist directly: line chart, Jan **800** … peak Nov **7,544** |
 | how many customers are there **in northwind** | **93** |
 | how many customers does **chinook** have | **59** |
+| compare the number of customers in olist and chinook | Both databases: *"Olist e-commerce has the most, with 96,096, against 59 in Chinook music store"* |
+| which has more customers, northwind or chinook | *"Northwind trading has the most, with 93, against 59 in Chinook music store"* |
 
 ## 8. Vague question (asks what you mean)
 
@@ -187,6 +189,19 @@ Delete the uploaded test sources afterwards (trash icon), or they will be offere
 | what is the weather in Lahore today | Says weather is not in the data |
 | write me a poem | Says it can only answer questions about the data |
 | who won the cricket world cup | Says it is not in the data |
+
+## 15b. Small talk, percentages and "what data do you have"
+
+| Say | Expected |
+|---|---|
+| thank you | *"You're welcome."* (no query is run) |
+| hello | A greeting with an example question |
+| how many customers are there → **never mind** | *"Okay, cancelled…"*; the "which database?" question is dropped |
+| what tables are in the database | Each database's table count, plus the full list in the table |
+| what tables are in chinook | Chinook's **11** tables |
+| what percentage of orders were canceled | **About 0.6 percent** (the value is 0.63, already a percentage) |
+| what percentage of customers are from SP | **About 42 percent** |
+| which artist has the most albums → **no, I meant the most tracks** | Iron Maiden, **213** tracks |
 
 ## 16. Self repair
 

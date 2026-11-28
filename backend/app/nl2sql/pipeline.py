@@ -18,6 +18,7 @@ from dataclasses import asdict
 
 from app.config import get_settings
 from app.llm import client as llm
+from app.nl2sql import smalltalk
 from app.nl2sql.sanity import suspicious
 from app.nl2sql.answer import spoken_answer, template_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
@@ -77,10 +78,10 @@ def _spoken_choices(names: list[str]) -> str:
     return f"That could be about the {listed} data. Which one do you mean{tail}"
 
 
-# Finds a database the user named in the question ('on Olist').
-def _named_source(question: str) -> str | None:
-    """'... on Olist', 'in the Chinook data': the user named a database. Returns its id when
-    exactly one source's distinctive first name word appears (not common words like 'test')."""
+# Finds the databases the user named in the question ('on Olist', 'Olist and Chinook').
+def _named_sources(question: str) -> list[str]:
+    """'... on Olist', 'in the Chinook data': the user named databases. Returns their ids
+    (a source counts when its distinctive first name word appears, not common words like 'test')."""
     from wordfreq import zipf_frequency
 
     words = set(re.findall(r"[a-z0-9]+", question.lower()))
@@ -89,7 +90,7 @@ def _named_source(question: str) -> str | None:
         name = re.findall(r"[a-z0-9]+", s.name.lower())
         if name and len(name[0]) >= 4 and zipf_frequency(name[0], "en") < 3.0 and name[0] in words:
             hits.append(s.id)
-    return hits[0] if len(hits) == 1 else None
+    return hits
 
 
 # The spoken clarifying question with its options said out loud.
@@ -104,6 +105,8 @@ def _spoken_intent(question: str, options: list[str]) -> str:
     return f"{q}: {', '.join(opts[:-1])}, or {opts[-1]}?"
 
 
+_COMPARE = re.compile(r"\b(compare|comparison|versus|vs|more|fewer|less|bigger|biggest|larger|largest|"
+                      r"smaller|higher|highest|lower|which (one )?has|who has)\b", re.I)
 _ADDITIVE = re.compile(r"^\s*select\s+(count|sum)\s*\(", re.I)
 
 
@@ -114,10 +117,19 @@ def _ask_all(question: str, ids: list[str], out: dict, clock, done) -> dict:
     from concurrent.futures import ThreadPoolExecutor
 
     reg = {s.id: s for s in get_registry().list()}
-    ids = [i for i in ids if i in reg and reg[i].active] or [s.id for s in get_registry().active()]
+    off = [reg[i].name for i in ids if i in reg and not reg[i].active]
+    ids = [i for i in ids if i in reg and reg[i].active]
+    if not ids:
+        return done("no_source", f"The {_join(off)} data {'is' if len(off) == 1 else 'are'} switched off. "
+                                 "Turn it on under Your data to ask it." if off else "No data source is switched on.")
+    if off:
+        out["switched_off_names"] = off
     t = time.perf_counter()
     with ThreadPoolExecutor(max_workers=len(ids) or 1) as pool:
-        parts = list(pool.map(lambda sid: ask(question, None, [sid], None, speak=False), ids))
+        # each one is told which database it answers for: "compare Olist and Chinook" must not make
+        # the Chinook writer reply "Olist isn't here"
+        parts = list(pool.map(lambda sid: ask(f"{question} (answer this for the {reg[sid].name} data only)",
+                                              None, [sid], None, speak=False), ids))
     clock.lap("all sources", t)
     out["parts"] = [{"source_id": sid, "source_name": reg[sid].name, "status": p["status"], "answer": p["answer"],
                      "sql": p.get("sql")} for sid, p in zip(ids, parts)]
@@ -131,6 +143,8 @@ def _ask_all(question: str, ids: list[str], out: dict, clock, done) -> dict:
     out["source_name"] = f"All {len(ids)} databases" if len(ids) > 2 else "Both databases"
     out["sql"] = "\n\n".join(f"-- {name}\n{p['sql']}" for name, p in ok)
     note = f" {_join(missing)} couldn't answer it." if missing else ""
+    if off:
+        note += f" {_join(off)} {'is' if len(off) == 1 else 'are'} switched off, so not included."
 
     def single(p):
         res = p["result"]
@@ -143,7 +157,14 @@ def _ask_all(question: str, ids: list[str], out: dict, clock, done) -> dict:
         measure = ok[0][1]["result"]["columns"][0]
         rows = [[name, v] for (name, _), v in zip(ok, values)]
         each = ", ".join(f"{_fmt(v)} in {name}" for name, v in rows)
-        if all(_ADDITIVE.match(p["sql"] or "") for _, p in ok):
+        if _COMPARE.search(question) and len(rows) > 1:
+            ranked = sorted(rows, key=lambda x: x[1], reverse=True)
+            if ranked[0][1] == ranked[1][1]:
+                answer = f"They are level: {each}.{note}"
+            else:
+                rest = ", ".join(f"{_fmt(v)} in {n}" for n, v in ranked[1:])
+                answer = f"{ranked[0][0]} has the most, with {_fmt(ranked[0][1])}, against {rest}.{note}"
+        elif all(_ADDITIVE.match(p["sql"] or "") for _, p in ok):
             total = sum(values)
             out["total"] = total
             answer = f"{_fmt(total)} in total: {each}.{note}"
@@ -170,6 +191,28 @@ def _ask_all(question: str, ids: list[str], out: dict, clock, done) -> dict:
 def _dropped_years(question: str, old_sql: str, new_sql: str) -> list[str]:
     years = dict.fromkeys(re.findall(r"\b((?:19|20)\d{2})\b", question))
     return [y for y in years if y in old_sql and y not in new_sql]
+
+
+# "What tables do you have?": the real tables of each database (or of the one named).
+def _catalog(question: str, out: dict, done) -> dict:
+    reg = get_registry()
+    named = set(_named_sources(question))
+    srcs = [s for s in reg.list() if (s.id in named if named else s.active)]
+    rows, said = [], []
+    for s in srcs:
+        try:
+            tables = reg.tables(s.id)
+        except Exception:  # an unreachable source is simply left out
+            continue
+        rows += [[s.name, t] for t in tables]
+        examples = ", ".join(tables[:3])
+        said.append(f"{s.name} has {len(tables)} tables, such as {examples}" if tables else f"{s.name} has no tables")
+    if not srcs:
+        return done("no_source", "No data source is switched on. Turn one on under Your data first.")
+    result = {"columns": ["database", "table"], "rows": rows, "row_count": len(rows), "truncated": False, "ms": 0.0}
+    out["result"] = {"ok": True, "sql": "", **result, "chart": choose_chart(result["columns"], rows)}
+    out["source_name"] = srcs[0].name if len(srcs) == 1 else f"All {len(srcs)} databases"
+    return done("answered", ". ".join(said) + ". The full list is in the table.")
 
 
 # "a", "a and b", "a, b and c"
@@ -200,6 +243,14 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         out["timings"]["total"] = clock.total()
         log.info("ask %s in %.0f ms: %s", status, out["timings"]["total"], question[:80])
         return out
+
+    # 0. not a data question: greetings, thanks, "never mind", "help", "what tables do you have"
+    talk = smalltalk.classify(question)
+    if talk == "catalog":
+        return _catalog(question, out, done)
+    if talk:
+        names = [s.name for s in get_registry().active()]
+        return done("cancelled" if talk == "cancel" else "chat", smalltalk.reply(talk, names))
 
     clarification = None
     if pending and pending.get("kind", "source") == "source" and pending.get("options"):
@@ -232,9 +283,12 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         return done("failed", "The language model key is not set, so I can't answer questions yet.")
 
     # 2. retrieve (a database the user named, "... on Olist", is used directly)
-    if source_ids is None and (named := _named_source(question)):
-        source_ids = [named]
+    if source_ids is None and (named := _named_sources(question)):
+        # one name: use that database; two or more ("compare Olist and Chinook"): ask each, combined
+        source_ids = named if len(named) == 1 else [ALL, *named]
         out["named_source"] = named
+        if source_ids[0] == ALL:
+            return _ask_all(question, source_ids[1:], out, clock, done)
     hist = (history or [])[-3:]
     prev = hist[-1] if hist else None
     t = time.perf_counter()

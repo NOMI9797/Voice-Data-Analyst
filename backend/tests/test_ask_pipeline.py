@@ -492,3 +492,25 @@ def test_repair_may_not_swap_the_year_the_user_asked_for(env):
     assert out["status"] == "answered" and out["result"]["rows"] == []
     assert out["answer"] == "There's no data for 2017 in the Shop data."
     assert len(env["ran"]) == 1  # the 2023 query never ran
+
+
+def test_never_mind_cancels_a_pending_question_without_the_llm(env):
+    pending = {"kind": "intent", "question": "show me the top customers", "asked": "By spending or orders?",
+               "options": ["By spending", "By orders"], "source_id": "src1"}
+    out = pipeline.ask("never mind", [], None, pending)
+    assert out["status"] == "cancelled" and env["gen"] == [] and not env["ran"]
+
+
+def test_thank_you_is_not_a_query(env):
+    out = pipeline.ask("thank you")
+    assert out["status"] == "chat" and out["answer"] == "You're welcome." and not env["ran"]
+
+
+def test_two_named_databases_are_compared(env, monkeypatch):
+    real = _all_env(monkeypatch, {
+        "n": _part("SELECT COUNT(*) AS customers FROM Customers", ["customers"], [[93]]),
+        "c": _part("SELECT COUNT(*) AS customers FROM Customer", ["customers"], [[59]])})
+    monkeypatch.setattr(pipeline, "_named_sources", lambda q: ["n", "c"])
+    out = real("which has more customers, northwind or chinook", [], None)
+    assert out["status"] == "answered"
+    assert out["answer"] == "Northwind trading has the most, with 93, against 59 in Chinook music store."

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from app.llm.client import LLMError, chat_json
 from app.nl2sql.insights import facts
@@ -24,11 +25,31 @@ SYSTEM = """You are a data analyst speaking to a business user. Answer their que
 - Use the KEY FACTS for numbers: they are computed exactly over all rows. Do not do your own arithmetic.
 - Never read the table out loud or list more than three items.
 - Say numbers the way a person would: round sensibly ("about 1.3 million", "4.2 out of 5", "38 percent"); no more than 3 numbers in total.
+- Follow the UNITS notes exactly: a value that is already a percentage is never multiplied by 100.
 - Do not assume a currency unless the schema notes or column names state it.
 - No markdown, no lists, no SQL, no column names in snake_case.
 - If the result is empty, say that nothing matched.
 - If only part of the rows are shown, do not claim totals over rows you cannot see.
 Reply as JSON: {"answer": "..."}"""
+
+
+_PERCENT = re.compile(r"(percent|percentage|pct|pcnt)", re.I)
+_FRACTION = re.compile(r"(share|rate|ratio|fraction|proportion)", re.I)
+
+
+# What the numbers in percent-like columns mean, so 0.63 isn't read out as "63 percent".
+def unit_notes(columns: list[str], rows: list[list]) -> list[str]:
+    notes = []
+    for i, c in enumerate(columns):
+        vals = [r[i] for r in rows if isinstance(r[i], (int, float)) and not isinstance(r[i], bool)]
+        if not vals:
+            continue
+        if _PERCENT.search(c):
+            notes.append(f"{c} is already in percent: {vals[0]} means {vals[0]} percent "
+                         f"(not {round(vals[0] * 100, 2)} percent). Do not multiply by 100.")
+        elif _FRACTION.search(c) and all(0 <= v <= 1 for v in vals):
+            notes.append(f"{c} is a fraction between 0 and 1: {vals[0]} means {round(vals[0] * 100, 2)} percent.")
+    return notes
 
 
 # Writes up to 30 result rows as text for the LLM.
@@ -47,6 +68,9 @@ def template_answer(columns: list[str], rows: list[list], chart: dict) -> str:
     """No-LLM fallback: the first computed facts, as plain sentences."""
     if not rows:
         return "The query ran, but nothing matched."
+    if len(rows) == 1 and len(columns) == 1 and isinstance(rows[0][0], (int, float)) and _PERCENT.search(columns[0]):
+        label = columns[0].replace("_", " ").strip().capitalize()
+        return f"{label}: {rows[0][0]:g} percent."
     found = facts(columns, rows, chart)
     if found:
         return " ".join(found[:2])
@@ -61,6 +85,9 @@ def spoken_answer(question: str, columns: list[str], rows: list[list], row_count
     key = facts(columns, rows, chart)
     if key:
         prompt += "\n\nKEY FACTS (exact, over all rows):\n" + "\n".join(f"- {f}" for f in key)
+    units = unit_notes(columns, rows)
+    if units:
+        prompt += "\n\nUNITS (follow exactly):\n" + "\n".join(f"- {u}" for u in units)
     if assumption:
         prompt += f"\n\nASSUMPTION MADE WHEN WRITING THE QUERY: {assumption}"
     try:
