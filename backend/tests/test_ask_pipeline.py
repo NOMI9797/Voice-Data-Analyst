@@ -181,6 +181,47 @@ def test_follow_up_switches_source_when_sticky_source_cannot_answer(env, monkeyp
     assert calls[1] == {}  # second retrieval without stickiness or context
 
 
+def test_same_source_retried_with_fresh_tables_before_switching(env, monkeypatch):
+    """'how many customers' after 'tracks per genre' on Chinook: the sticky search only found
+    genre tables; a fresh search on Chinook finds Customer, so answer there without switching."""
+    from app.nl2sql.generator import Turn
+    scores = [{"source_id": "chinook", "score": 0.7, "term_coverage": {"customer": 1.0}}]
+
+    def fake_retrieve(q, ids=None, **kw):
+        schema = "TABLE Genre ..." if kw.get("prefer_source") else "TABLE Customer ..."
+        return SimpleNamespace(**{**RETRIEVAL, "source_id": "chinook", "source_name": "Chinook",
+                                  "schema_text": schema, "source_scores": scores}, question=q)
+
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
+    env["gen"] += [Generation(sql=None, message="no customers here"),
+                   Generation(sql="select count(*) as customers from customers")]
+    env["db"].append(ok_result(("customers",), ((59,),)))
+    out = pipeline.ask("how many customers are there", [Turn("tracks per genre", "select ...", "chinook")])
+    assert out["status"] == "answered" and out["source_id"] == "chinook" and not out.get("switched_source")
+
+
+def test_topic_change_that_fits_several_sources_asks(env, monkeypatch):
+    """Previous turn was on a CSV with no customers; 'how many customers' fits all three
+    other databases equally, so ask instead of silently picking one."""
+    from app.nl2sql.generator import Turn
+    three = [{"source_id": "olist", "name": "Olist e-commerce"}, {"source_id": "chinook", "name": "Chinook music store"},
+             {"source_id": "north", "name": "Northwind trading"}]
+
+    def fake_retrieve(q, ids=None, **kw):
+        scores = [{"source_id": "csv", "score": 0.6, "term_coverage": {"customer": 0.5}}]
+        if kw.get("prefer_source"):
+            return SimpleNamespace(**{**RETRIEVAL, "source_id": "csv", "source_name": "shop_sales",
+                                      "source_scores": scores}, question=q)
+        return SimpleNamespace(**{**RETRIEVAL, "source_id": "north", "choices": three, "source_scores": scores}, question=q)
+
+    monkeypatch.setattr(pipeline, "retrieve", fake_retrieve)
+    env["gen"] += [Generation(sql=None, message="no customers here")]
+    out = pipeline.ask("how many customers are there", [Turn("sales by region", "select ...", "csv")])
+    assert out["status"] == "clarify" and [c["source_id"] for c in out["clarify"]["options"]] == ["olist", "chinook", "north"]
+    assert out["answer"].startswith("That isn't in the shop_sales data.")
+    assert not env["ran"]
+
+
 def test_no_switch_when_best_source_is_the_same(env):
     from app.nl2sql.generator import Turn
     env["gen"].append(Generation(sql=None, message="no weather data"))

@@ -229,11 +229,41 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
                                          f"{off['name']} data, which is switched off. Turn it on under Your data to ask it.")
     if not gen.sql and not gen.clarify_question and prev and r.source_id == prev.source_id and has_subject:
         # We stayed on the previous question's source, but it can't answer this one.
-        # Maybe the user changed topic: retry once on the source that fits the
-        # question by itself.
+        # First: the same source, searched for this question alone. The previous question's
+        # words can keep the right tables out ("how many customers" after "tracks per genre").
+        t = time.perf_counter()
+        fresh = retrieve(question, [r.source_id])
+        clock.lap("retrieval", t)
+        if fresh.source_id == r.source_id and fresh.schema_text != r.schema_text:
+            t = time.perf_counter()
+            try:
+                fresh_gen = generate_sql(question, fresh.schema_text, fresh.dialect, fresh.value_hits, [])
+            except llm.LLMError:
+                fresh_gen = None
+            clock.lap("sql generation", t)
+            if fresh_gen and fresh_gen.sql:
+                r, gen, hist = fresh, fresh_gen, []
+                out["retrieval"] = asdict(r)
+                out["assumption"] = gen.assumption
+    if not gen.sql and not gen.clarify_question and prev and r.source_id == prev.source_id and has_subject:
+        # Still nothing: maybe the user changed topic. Retry once on the source that fits
+        # the question by itself.
         t = time.perf_counter()
         alt = retrieve(question, source_ids)
         clock.lap("retrieval", t)
+        if alt.choices:
+            # the new topic fits several sources equally: ask, as for any other tie
+            # (minus the previous source, which we already know can't answer it)
+            opts = [c for c in alt.choices if c["source_id"] != r.source_id]
+            if len(opts) > 1:
+                spoken = f"That isn't in the {r.source_name} data. " + _spoken_choices([c["name"] for c in opts])
+                out["choices"] = opts
+                out["clarify"] = {"kind": "source", "asked": spoken, "options": opts}
+                return done("clarify", spoken)
+            if opts:
+                t = time.perf_counter()
+                alt = retrieve(question, [opts[0]["source_id"]])
+                clock.lap("retrieval", t)
         if alt.source_id and alt.source_id != r.source_id \
                 and (alt_tables := allowed_tables(alt.source_id)):
             t = time.perf_counter()
