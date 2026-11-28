@@ -101,7 +101,9 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
       setWork("thinking");
       const t1 = performance.now();
       const res = await api.ask(q, history, {
-        source_ids: opts.pickSource ? [opts.pickSource] : scope !== "auto" ? [scope] : undefined,
+        source_ids: opts.pickSource === "*all*" && pending?.kind === "source"
+          ? ["*all*", ...pending.options.map((o) => o.source_id)]
+          : opts.pickSource ? [opts.pickSource] : scope !== "auto" ? [scope] : undefined,
         pending: opts.pickSource ? null : pending,
       });
       t["ask (server total)"] = Math.round(performance.now() - t1);

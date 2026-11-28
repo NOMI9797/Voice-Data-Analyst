@@ -22,7 +22,7 @@ from app.nl2sql.sanity import suspicious
 from app.nl2sql.answer import spoken_answer, template_answer
 from app.nl2sql.generator import Generation, Turn, generate_sql, repair_sql
 from app.profiler.retriever import add_tables, retrieve, switched_off_fit, tables_named_in, widen
-from app.profiler.routing import OFF_TOPIC_SCORE, resolve_choice, resolve_intent_reply
+from app.profiler.routing import ALL, OFF_TOPIC_SCORE, resolve_choice, resolve_intent_reply
 from app.profiler.store import get_store
 from app.safety.executor import QueryError, run_query
 from app.safety.guard import check_sql
@@ -73,7 +73,8 @@ def _same_sql(a: str, b: str) -> bool:
 # The spoken 'which database do you mean?' question.
 def _spoken_choices(names: list[str]) -> str:
     listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
-    return f"That could be about the {listed} data. Which one do you mean?"
+    tail = ", or all of them?" if len(names) > 1 else "?"
+    return f"That could be about the {listed} data. Which one do you mean{tail}"
 
 
 # Finds a database the user named in the question ('on Olist').
@@ -103,6 +104,84 @@ def _spoken_intent(question: str, options: list[str]) -> str:
     return f"{q}: {', '.join(opts[:-1])}, or {opts[-1]}?"
 
 
+_ADDITIVE = re.compile(r"^\s*select\s+(count|sum)\s*\(", re.I)
+
+
+# "All of them": asks the question on every chosen source and combines the answers.
+def _ask_all(question: str, ids: list[str], out: dict, clock, done) -> dict:
+    """Counts and sums are added up ("59 + 93 + 96,096"); other single values (averages)
+    are listed side by side, never added; longer results are stacked with a source column."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    reg = {s.id: s for s in get_registry().list()}
+    ids = [i for i in ids if i in reg and reg[i].active] or [s.id for s in get_registry().active()]
+    t = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=len(ids) or 1) as pool:
+        parts = list(pool.map(lambda sid: ask(question, None, [sid], None, speak=False), ids))
+    clock.lap("all sources", t)
+    out["parts"] = [{"source_id": sid, "source_name": reg[sid].name, "status": p["status"], "answer": p["answer"],
+                     "sql": p.get("sql")} for sid, p in zip(ids, parts)]
+    ok = [(reg[sid].name, p) for sid, p in zip(ids, parts) if p["status"] == "answered" and p.get("result")]
+    missing = [reg[sid].name for sid, p in zip(ids, parts) if not (p["status"] == "answered" and p.get("result"))]
+    if not ok:
+        refused = next((p for p in parts if p["status"] == "refused"), None)
+        if refused:
+            return done("refused", refused["answer"])
+        return done("cannot_answer", "None of the databases could answer that.")
+    out["source_name"] = f"All {len(ids)} databases" if len(ids) > 2 else "Both databases"
+    out["sql"] = "\n\n".join(f"-- {name}\n{p['sql']}" for name, p in ok)
+    note = f" {_join(missing)} couldn't answer it." if missing else ""
+
+    def single(p):
+        res = p["result"]
+        nums = [i for i, v in enumerate(res["rows"][0]) if isinstance(v, (int, float)) and not isinstance(v, bool)] \
+            if res["row_count"] == 1 else []
+        return res["rows"][0][nums[0]] if len(nums) == 1 and len(res["columns"]) == 1 else None
+
+    values = [single(p) for _, p in ok]
+    if all(v is not None for v in values):
+        measure = ok[0][1]["result"]["columns"][0]
+        rows = [[name, v] for (name, _), v in zip(ok, values)]
+        each = ", ".join(f"{_fmt(v)} in {name}" for name, v in rows)
+        if all(_ADDITIVE.match(p["sql"] or "") for _, p in ok):
+            total = sum(values)
+            out["total"] = total
+            answer = f"{_fmt(total)} in total: {each}.{note}"
+        else:
+            answer = f"Each database separately: {each}. These can't simply be added together.{note}"
+        result = {"columns": ["database", measure], "rows": rows, "row_count": len(rows), "truncated": False, "ms": 0.0}
+    else:
+        cols = ok[0][1]["result"]["columns"]
+        same = all(len(p["result"]["columns"]) == len(cols) for _, p in ok)
+        if not same:
+            return done("cannot_answer", "The databases answered that in different shapes, so I can't combine them. "
+                                         "Ask each one separately.")
+        rows = [[name, *r] for name, p in ok for r in p["result"]["rows"]]
+        result = {"columns": ["database", *cols], "rows": rows, "row_count": len(rows),
+                  "truncated": any(p["result"]["truncated"] for _, p in ok), "ms": 0.0}
+        answer = " ".join(f"{name}: {p['answer']}" for name, p in ok) + note
+    chart = choose_chart(result["columns"], result["rows"])
+    out["result"] = {"ok": True, "sql": out["sql"], **result, "chart": chart}
+    out["answer_by_llm"] = False
+    return done("answered", answer)
+
+
+# Years the question asks about that a repaired query no longer filters on.
+def _dropped_years(question: str, old_sql: str, new_sql: str) -> list[str]:
+    years = dict.fromkeys(re.findall(r"\b((?:19|20)\d{2})\b", question))
+    return [y for y in years if y in old_sql and y not in new_sql]
+
+
+# "a", "a and b", "a, b and c"
+def _join(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+# 96096 -> "96,096"; 4.0864 -> "4.09"
+def _fmt(v) -> str:
+    return f"{v:,}" if isinstance(v, int) else f"{v:,.2f}"
+
+
 # MAIN CONTROLLER: screen -> find tables/source -> write SQL -> check -> run -> repair -> chart -> facts -> spoken answer.
 def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] | None = None,
         pending: dict | None = None, speak: bool = True) -> dict:
@@ -128,7 +207,7 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
         if chosen:
             out["chosen_source"] = chosen
             question = out["question"] = pending["question"]
-            source_ids = [chosen]
+            source_ids = [ALL] + [o["source_id"] for o in pending["options"]] if chosen == ALL else [chosen]
     elif pending and pending.get("kind") == "intent":
         answer = resolve_intent_reply(question, pending.get("options") or [])
         if answer:
@@ -138,6 +217,9 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
             out["question"] = f"{question} ({answer})"  # what history and the UI show
             if pending.get("source_id"):
                 source_ids = [pending["source_id"]]
+
+    if source_ids and source_ids[0] == ALL:
+        return _ask_all(question, source_ids[1:], out, clock, done)
 
     # 1. screen
     t = time.perf_counter()
@@ -360,6 +442,13 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
                 break
             out["sql"] = sql
             return done("cannot_answer", fix.message or "I couldn't find a way to answer that from this data.")
+        if kept is not None and (lost := _dropped_years(question, sql, fix.sql)):
+            # "revenue for 2017" came back empty and the "fix" swapped in another year: that
+            # answers a different question. The empty result is the true answer.
+            out["sql"], result = kept
+            out["no_data_for"] = lost
+            out["attempts"][-1]["rejected_fix"] = fix.sql
+            break
         sql = fix.sql
 
     # 5. chart + spoken answer
@@ -375,6 +464,8 @@ def ask(question: str, history: list[Turn] | None = None, source_ids: list[str] 
                                        result["truncated"], chart, gen.assumption)
     clock.lap("answer", t)
     out["answer_by_llm"] = by_llm
+    if out.get("no_data_for") and not result["rows"]:
+        answer = f"There's no data for {_join(out['no_data_for'])} in the {r.source_name} data."
     if out.get("switched_source"):
         answer = f"That's not in the earlier data, so I looked in {r.source_name}. {answer}"
     return done("answered", answer)

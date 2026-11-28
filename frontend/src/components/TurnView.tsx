@@ -215,7 +215,12 @@ export default function TurnView({ turn, isLatest, phase, userSpeaking, pending,
                           className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-900 hover:bg-indigo-100">
                           {i + 1}. {o.name}
                         </button>
-                      ))
+                      )).concat(pending.options.length > 1 ? [
+                        <button key="*all*" onClick={() => onPickSource(pending.question, "*all*")}
+                          className="rounded-full border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-900 hover:bg-indigo-50">
+                          All of them
+                        </button>,
+                      ] : [])
                     : pending.options.map((o, i) => (
                         <button key={o} onClick={() => onReply(o)}
                           className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-900 hover:bg-indigo-100">

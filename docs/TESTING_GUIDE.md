@@ -74,6 +74,17 @@ The question fits two or three databases equally, so the app asks and then **lis
 | how many customers are there | "Northwind, Chinook or Olist?" | "Chinook", or "the second one" | **59** customers |
 | show monthly revenue for 2017 | Asks which of the three | "Olist" | Line chart: Jan **138,488** … peak Nov about **1.2 million** |
 
+**"All of them":** every "which database?" question also offers **All of them** (a button, or say "all of them", "both", "all three in total").
+
+| Question | Reply | Expected |
+|---|---|---|
+| how many customers are there | "all of them in total" | **About 96,248 in total** (93 Northwind, 59 Chinook, Olist about 96,000*), bar chart per database |
+| how many orders were placed in 2017 | "both" | **46,881 in total**: 1,780 Northwind + 45,101 Olist |
+| what is the average order value | "all of them" | Each database separately; *"These can't simply be added together"* (averages are never summed) |
+| show monthly revenue for 2017 | "all three" | Northwind and Olist months; *"There's no data for 2017 in the Chinook music store data"* (Chinook covers 2021–2025) |
+
+\*Olist has 96,096 unique customers but 99,441 customer IDs (one per order); the model may count either.
+
 ## 7. Naming the database (no question back)
 
 | Question | Expected |

@@ -55,6 +55,10 @@ OPTS = [{"source_id": "o", "name": "Olist e-commerce"}, {"source_id": "c", "name
     ("which one has more customers", None),
     ("which music genre sells best", None),     # contains "music" but is a new question
     ("olist or chinook", None),                 # picks two
+    ("Tell me from all of them in total.", "*all*"),
+    ("Tell me overall total all from 3.", "*all*"),
+    ("both", "*all*"),
+    ("show all orders", None),                  # a new question, not "all of them"
     ("one", "o"),
     ("", None),
 ])

@@ -237,7 +237,7 @@ def test_close_call_asks_which_source_without_llm(env, monkeypatch):
         **{**RETRIEVAL, "choices": OPTIONS}, question=q))
     out = pipeline.ask("how many customers are there")
     assert out["status"] == "clarify" and out["clarify"]["kind"] == "source"
-    assert out["answer"] == "That could be about the Olist e-commerce or Chinook music store data. Which one do you mean?"
+    assert out["answer"] == "That could be about the Olist e-commerce or Chinook music store data. Which one do you mean, or all of them?"
     assert env["gen"] == [] and not env["ran"]  # no LLM call, no query
 
 
@@ -442,3 +442,53 @@ def test_question_for_switched_off_source_says_so(env, monkeypatch):
     out = pipeline.ask("how many sellers are in SP")
     assert out["status"] == "cannot_answer" and "Olist e-commerce data, which is switched off" in out["answer"]
     assert env["gen"] == [] and not env["ran"]
+
+
+def _all_env(monkeypatch, parts):
+    """Three fake sources; the per-source asks return the scripted results."""
+    srcs = [SimpleNamespace(id=i, name=n, active=True) for i, n in
+            [("o", "Olist e-commerce"), ("c", "Chinook music store"), ("n", "Northwind trading")]]
+    monkeypatch.setattr(pipeline, "get_registry", lambda: SimpleNamespace(list=lambda: srcs, active=lambda: srcs))
+    real = pipeline.ask
+    monkeypatch.setattr(pipeline, "ask", lambda q, h, ids, p, speak=True: parts[ids[0]])
+    return real
+
+
+def _part(sql, columns, rows):
+    return {"status": "answered", "answer": "x", "sql": sql,
+            "result": {"columns": columns, "rows": rows, "row_count": len(rows), "truncated": False, "ms": 1.0}}
+
+
+def test_all_of_them_adds_up_counts(env, monkeypatch):
+    real = _all_env(monkeypatch, {
+        "o": _part("SELECT COUNT(*) AS customers FROM customers", ["customers"], [[96096]]),
+        "c": _part("SELECT COUNT(*) AS customers FROM Customer", ["customers"], [[59]]),
+        "n": _part("select count(*) as customers from Customers", ["customers"], [[93]])})
+    pending = {"kind": "source", "question": "how many customers are there",
+               "options": [{"source_id": "o", "name": "Olist e-commerce"}, {"source_id": "c", "name": "Chinook music store"},
+                           {"source_id": "n", "name": "Northwind trading"}]}
+    out = real("all of them in total", [], None, pending)
+    assert out["status"] == "answered" and out["total"] == 96248
+    assert out["answer"].startswith("96,248 in total: 96,096 in Olist e-commerce, 59 in Chinook music store")
+    assert out["result"]["rows"] == [["Olist e-commerce", 96096], ["Chinook music store", 59], ["Northwind trading", 93]]
+
+
+def test_all_of_them_never_adds_averages(env, monkeypatch):
+    real = _all_env(monkeypatch, {
+        "o": _part("SELECT AVG(price) AS avg_price FROM items", ["avg_price"], [[120.65]]),
+        "c": _part("SELECT AVG(UnitPrice) AS avg_price FROM Track", ["avg_price"], [[1.05]])})
+    out = real("what is the average price", [], ["*all*", "o", "c"])
+    assert out["status"] == "answered" and "total" not in out
+    assert "can't simply be added" in out["answer"]
+
+
+def test_repair_may_not_swap_the_year_the_user_asked_for(env):
+    """'revenue for 2017' on data from 2021-2025 is empty. The suspicious-result repair once
+    changed 2017 to 2023 and answered a different question; now the empty result stands."""
+    env["gen"].append(Generation(sql="select month, sum(total) as revenue from orders where year = 2017 group by month"))
+    env["db"].append(ok_result(("month", "revenue"), ()))
+    env["repairs"].append(Generation(sql="select month, sum(total) as revenue from orders where year = 2023 group by month"))
+    out = pipeline.ask("show monthly revenue for 2017")
+    assert out["status"] == "answered" and out["result"]["rows"] == []
+    assert out["answer"] == "There's no data for 2017 in the Shop data."
+    assert len(env["ran"]) == 1  # the 2023 query never ran

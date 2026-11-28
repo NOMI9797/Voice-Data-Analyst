@@ -64,6 +64,24 @@ _FILLER = {"the", "a", "an", "one", "data", "database", "db", "source", "please"
            "use", "in", "from", "for", "about", "it", "its", "that", "this", "is", "go", "with", "let's", "lets"}
 
 
+ALL = "*all*"  # the reply picked every offered source ("all of them", "all 3 in total")
+_ALL_TRIGGERS = {"all", "both", "every", "each", "combined", "together", "total", "overall", "everything",
+                 "altogether", "sum"}
+# the only other words an "all of them" reply may contain; anything else ("show all orders")
+# makes it a new question
+_ALL_OK = _FILLER | _ALL_TRIGGERS | {"tell", "me", "give", "show", "of", "them", "three", "3", "two", "2",
+                                     "databases", "sources", "ones", "and", "across", "add", "up", "want",
+                                     "answer", "say", "count", "just", "you", "can", "could", "we", "four", "4",
+                                     "single", "these", "those", "do", "how", "about"}
+
+
+# True for a reply that picks every offered source.
+def wants_all(reply: str) -> bool:
+    words = _words(reply)
+    return bool(words) and len(words) <= 12 and any(w in _ALL_TRIGGERS for w in words) \
+        and all(w in _ALL_OK for w in words)
+
+
 # Splits text into lowercase words.
 def _words(s: str) -> list[str]:
     import re
@@ -77,6 +95,8 @@ def resolve_choice(reply: str, options: list[dict]) -> str | None:
     reply doesn't clearly pick exactly one option; then it is treated as a new
     question ("which music genre sells best" must not count as picking "music store")."""
     words = _words(reply)
+    if options and len(options) > 1 and wants_all(reply):
+        return ALL
     if not words or not options or len(words) > 6:
         return None
     all_name_words = set().union(*(set(_words(o["name"])) for o in options))
