@@ -3,7 +3,7 @@
 Talk to your databases. Ask a business question out loud ("which products brought in the most revenue last quarter?") and get back a chart, a table, the SQL that was run, and a short spoken explanation. Speech recognition and text-to-speech run on your machine; no SQL knowledge is needed.
 
 **Course project:** Project 4, Voice Data Analyst (NLP course, Complex Computing Problem).
-**Report:** [docs/REPORT.md](docs/REPORT.md) · **Architecture diagram:** [docs/architecture.svg](docs/architecture.svg)
+**Report:** [docs/REPORT.md](docs/REPORT.md) (detailed version: [docs/REPORT_DETAILED.md](docs/REPORT_DETAILED.md)) · **Architecture diagram:** [docs/architecture.svg](docs/architecture.svg)
 
 ## Group members
 
@@ -115,7 +115,7 @@ docker compose exec backend python -m pytest -q tests
 ```
 
 ## Evaluation
-Run from the project folder while the app is up (plain Python 3, no extra packages). Results go to `eval/results/` (not committed). Full numbers and discussion are in the [report](docs/REPORT.md#6-evaluation).
+Run from the project folder while the app is up (plain Python 3, no extra packages). Results go to `eval/results/` (not committed). Results are summarised in the [report](docs/REPORT.md#6-evaluation-results); every run and its discussion are in the [detailed report](docs/REPORT_DETAILED.md#6-evaluation).
 
 ```bash
 python3 eval/voice_eval.py              # domain-word accuracy before/after correction, and per-stage latency (--hint: with a Whisper name prompt)
