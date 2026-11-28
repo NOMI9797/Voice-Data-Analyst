@@ -7,50 +7,62 @@ import VoiceOrb, { phaseLabel, type Phase } from "./VoiceOrb";
 
 let nextId = 1;
 
-// The empty screen: welcome text and starter questions per database.
-function EmptyState({ suggestions, onAsk }: { suggestions: Suggestion[]; onAsk: (q: string, sourceId: string) => void }) {
-  const bySource = suggestions.reduce<Record<string, Suggestion[]>>((acc, s) => {
+// The welcome screen: a big mic, and starter questions per database.
+function EmptyState({ suggestions, onAsk, orb, hint }: {
+  suggestions: Suggestion[];
+  onAsk: (q: string, sourceId: string) => void;
+  orb: React.ReactNode;
+  hint: string;
+}) {
+  // two per database, so every source is represented
+  const picked = Object.values(suggestions.reduce<Record<string, Suggestion[]>>((acc, s) => {
     (acc[s.source_name] ??= []).push(s);
     return acc;
-  }, {});
+  }, {})).flatMap((list) => list.slice(0, 2));
   return (
-    <div className="mx-auto flex max-w-2xl flex-col items-center px-4 py-10 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-lg">
-        <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-          <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Zm7 9a7 7 0 0 1-14 0m7 7v4" strokeLinecap="round" />
-        </svg>
+    <div className="mx-auto flex max-w-3xl flex-col items-center px-6 pb-10 pt-[8vh] text-center">
+      <div className="relative">
+        <div className="absolute inset-[-28px] rounded-full bg-gradient-to-br from-indigo-400/25 via-violet-400/20 to-fuchsia-400/20 blur-2xl" aria-hidden />
+        <div className="relative">{orb}</div>
       </div>
-      <h2 className="mt-4 text-2xl font-semibold text-slate-900">Ask your data a question</h2>
-      <p className="mt-2 text-slate-600">
-        Speak or type in plain English. You'll get the answer read out loud, a chart and a table, and the SQL that was run.
+      <p className="mt-4 text-sm font-medium text-indigo-600" aria-live="polite">{hint}</p>
+      <h2 className="mt-6 text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">What would you like to know?</h2>
+      <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-slate-500">
+        Ask in plain English, by voice or by typing. You get a spoken answer, a chart and a table,
+        and the exact SQL that was run.
       </p>
-      {Object.keys(bySource).length > 0 && (
-        <div className="mt-8 w-full space-y-4 text-left">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Try asking</p>
-          {Object.entries(bySource).map(([name, list]) => (
-            <div key={name}>
-              <p className="mb-1.5 text-xs font-medium text-slate-500">{name}</p>
-              <div className="flex flex-wrap gap-2">
-                {list.map((s) => (
-                  <button key={s.question} onClick={() => onAsk(s.question, s.source_id)}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/50">
-                    {s.question}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+
+      {picked.length > 0 && (
+        <div className="mt-10 w-full text-left">
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Try one of these</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {picked.map((s) => (
+              <button key={s.source_id + s.question} onClick={() => onAsk(s.question, s.source_id)}
+                className="group flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_8px_24px_rgba(79,70,229,0.08)]">
+                <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" /> {s.source_name}
+                </span>
+                <span className="flex items-start justify-between gap-3 text-[15px] leading-snug text-slate-800">
+                  {s.question}
+                  <span className="mt-0.5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-indigo-500" aria-hidden>→</span>
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
-      <p className="mt-8 text-xs text-slate-500">
-        Tip: after an answer, say <i>“now break it down by month”</i> or <i>“same for last year”</i> to change it.
-      </p>
+
+      <div className="mt-10 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-slate-400">
+        <span>🔒 Your voice never leaves this computer</span>
+        <span>🛡️ Read-only, checked by a safety guard</span>
+        <span>↻ Say “now break it down by month” to follow up</span>
+      </div>
     </div>
   );
 }
 
 // MAIN: the conversation: questions, answers, voice, memory of the last 3 questions.
-export default function Conversation({ sourcesVersion }: { sourcesVersion: number }) {
+export default function Conversation({ sourcesVersion, onOpenData }: { sourcesVersion: number; onOpenData: () => void }) {
   const [turns, setTurns] = useState<TurnData[]>([]);
   const [text, setText] = useState("");
   const [work, setWork] = useState<Phase>("idle"); // transcribing / correcting / thinking while requests run
@@ -227,14 +239,42 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
     setNotice(null);
   }
 
+  const title = turns.length ? (turns[0].reply?.question ?? turns[0].asked) : "New analysis";
+
   return (
     <section className="flex min-h-0 flex-1 flex-col">
+      <header className="flex shrink-0 items-center gap-3 border-b border-slate-200/70 bg-white/70 px-4 py-3 backdrop-blur sm:px-6">
+        <button onClick={onOpenData} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 lg:hidden">
+          Data
+        </button>
+        <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700" title={title}>{title}</h1>
+        {active.length > 1 && (
+          <label className="hidden items-center gap-2 text-xs text-slate-500 sm:flex">
+            Ask
+            <select value={scope} onChange={(e) => { setScope(e.target.value); setHistory([]); setPending(null); }}
+              title="All data: the app picks the database for each question, and asks you when it's unclear"
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 focus:border-indigo-400 focus:outline-none">
+              <option value="auto">All data ({active.length})</option>
+              {active.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </label>
+        )}
+        {turns.length > 0 && (
+          <button onClick={newConversation}
+            title={history.length ? `Follow-ups currently use the last ${history.length} question(s) as context` : undefined}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-slate-700">
+            <span aria-hidden>+</span> New conversation
+          </button>
+        )}
+      </header>
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         {turns.length === 0 ? (
-          <EmptyState suggestions={suggestions}
+          <EmptyState suggestions={suggestions} hint={phaseLabel(phase, recorder.speaking)}
+            orb={<VoiceOrb phase={phase} level={recorder.level} onClick={orbClick} size={96} />}
             onAsk={(q, sourceId) => { speaker.unlock(); speaker.stop(); recorder.cancel(); ask(q, { pickSource: sourceId }); }} />
         ) : (
-          <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
+          <div className="mx-auto max-w-3xl space-y-8 px-4 py-8 sm:px-6">
             {turns.map((t, i) => (
               <TurnView key={t.id} turn={t} isLatest={i === turns.length - 1} phase={phase} userSpeaking={recorder.speaking}
                 pending={pending}
@@ -254,51 +294,36 @@ export default function Conversation({ sourcesVersion }: { sourcesVersion: numbe
         )}
       </div>
 
-      <div className="border-t border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto max-w-4xl px-4 py-3">
+      <div className="shrink-0 px-4 pb-4 pt-2 sm:px-6">
+        <div className="mx-auto max-w-3xl">
           {(notice || recorder.error) && (
-            <p className="mb-2 rounded-lg bg-amber-50 px-3 py-1.5 text-sm text-amber-900" role="status">{recorder.error ?? notice}</p>
+            <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">{recorder.error ?? notice}</p>
           )}
           {speaker.blocked && (
-            <p className="mb-2 rounded-lg bg-amber-50 px-3 py-1.5 text-sm text-amber-900" role="status">
+            <p className="mb-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
               The browser blocked sound for this page. Click <b>Play answer</b> on the answer, or allow sound for
               localhost in the browser's site settings.
             </p>
           )}
-          <div className="flex items-center gap-3">
-            <VoiceOrb phase={phase} level={recorder.level} onClick={orbClick} />
-            <form className="flex min-w-0 flex-1 items-center gap-2 rounded-2xl border border-slate-300 bg-white py-1 pl-4 pr-1 shadow-sm focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100"
-              onSubmit={(e) => { e.preventDefault(); sendTyped(text); }}>
+          <div className={`flex items-center gap-2 rounded-[28px] border bg-white p-2 shadow-[0_10px_40px_rgba(15,23,42,0.08)] transition ${
+            phase === "listening" ? "border-rose-300 ring-4 ring-rose-100" : "border-slate-200 focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-100"}`}>
+            {turns.length > 0 && <VoiceOrb phase={phase} level={recorder.level} onClick={orbClick} size={44} />}
+            <form className="flex min-w-0 flex-1 items-center gap-2 pl-2" onSubmit={(e) => { e.preventDefault(); sendTyped(text); }}>
               <input value={text} onChange={(e) => setText(e.target.value)} disabled={phase === "listening"}
-                placeholder={pending ? "Type your answer, or just say it…" : "Type a question, e.g. which product categories have the worst reviews?"}
+                placeholder={pending ? "Type your answer, or just say it…" : "Ask about your data…"}
                 aria-label="Question"
-                className="min-w-0 flex-1 bg-transparent py-1.5 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none" />
-              {active.length > 1 && (
-                <select value={scope} onChange={(e) => { setScope(e.target.value); setHistory([]); setPending(null); }}
-                  aria-label="Which data to ask"
-                  title="All active: the app picks the database for each question, and asks you when it's unclear"
-                  className="hidden max-w-40 rounded-lg border-0 bg-slate-100 px-2 py-1.5 text-xs text-slate-700 focus:outline-none sm:block">
-                  <option value="auto">All data ({active.length})</option>
-                  {active.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              )}
+                className="min-w-0 flex-1 bg-transparent py-2 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none" />
               <button disabled={busy || !text.trim()} aria-label="Ask"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400">
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M5 12h14M13 6l6 6-6 6" />
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-white transition hover:bg-indigo-500 disabled:bg-slate-100 disabled:text-slate-300">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M12 19V5M6 11l6-6 6 6" />
                 </svg>
               </button>
             </form>
           </div>
-          <div className="mt-1.5 flex items-center justify-between pl-[68px] text-xs text-slate-500">
-            <span aria-live="polite">{phaseLabel(phase, recorder.speaking)}</span>
-            {turns.length > 0 && (
-              <button onClick={newConversation} className="hover:text-slate-800"
-                title={history.length ? `Follow-ups currently use the last ${history.length} question(s) as context` : undefined}>
-                New conversation
-              </button>
-            )}
-          </div>
+          <p className="mt-2 text-center text-xs text-slate-400" aria-live="polite">
+            {turns.length > 0 ? phaseLabel(phase, recorder.speaking) : "Speech is recognised and spoken on this computer"}
+          </p>
         </div>
       </div>
     </section>

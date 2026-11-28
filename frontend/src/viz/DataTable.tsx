@@ -39,9 +39,9 @@ export default function DataTable({ columns, rows }: { columns: string[]; rows: 
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-md border border-slate-200">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="min-w-full text-left text-xs">
-          <thead className="bg-slate-50 text-slate-600">
+          <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
               {columns.map((c, i) => (
                 <th key={i} className={`whitespace-nowrap px-3 py-2 font-medium ${numeric[i] ? "text-right" : ""}`}>

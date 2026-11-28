@@ -42,7 +42,7 @@ export default function VoiceOrb({ phase, level, onClick, size = 56 }: {
       ? "bg-gradient-to-br from-indigo-500 to-violet-700"
       : speaking
         ? "bg-gradient-to-br from-sky-500 to-teal-600"
-        : "bg-gradient-to-br from-slate-800 to-slate-950 hover:from-slate-700 hover:to-slate-900";
+        : "bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 hover:brightness-110";
 
   return (
     <button
@@ -61,15 +61,15 @@ export default function VoiceOrb({ phase, level, onClick, size = 56 }: {
         <span className="orb-spin absolute inset-[-4px] rounded-full border-[3px] border-transparent border-t-violet-300 border-r-violet-300/60" />
       )}
       {speaking ? (
-        <span className="flex h-5 items-center gap-[3px]" aria-hidden>
+        <span className="flex items-center gap-[3px]" style={{ height: size * 0.36 }} aria-hidden>
           {[0, 0.15, 0.3, 0.45].map((d) => (
             <span key={d} className="orb-bar h-full w-[3px] rounded-full bg-white" style={{ animationDelay: `${d}s` }} />
           ))}
         </span>
       ) : listening ? (
-        <span className="h-4 w-4 rounded-[3px] bg-white" aria-hidden />
+        <span className="rounded-[4px] bg-white" style={{ width: size * 0.28, height: size * 0.28 }} aria-hidden />
       ) : (
-        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor" aria-hidden>
+        <svg viewBox="0 0 24 24" style={{ width: size * 0.42, height: size * 0.42 }} fill="currentColor" aria-hidden>
           <path d={MIC} />
         </svg>
       )}

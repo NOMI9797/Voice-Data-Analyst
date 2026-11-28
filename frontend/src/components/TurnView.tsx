@@ -1,6 +1,6 @@
 import { Suspense, lazy, useState } from "react";
 import type { AskResponse, CorrectionResult, Pending, SqlRun } from "../api/client";
-import { phaseLabel, type Phase } from "./VoiceOrb";
+import type { Phase } from "./VoiceOrb";
 
 const ResultView = lazy(() => import("../viz/ResultView")); // charts library loads on first use
 
@@ -19,12 +19,12 @@ export type TurnData = {
 };
 
 const STATUS: Record<string, { label: string; tone: string }> = {
-  refused: { label: "Refused for safety", tone: "bg-amber-100 text-amber-900" },
-  cannot_answer: { label: "Not in this data", tone: "bg-slate-200 text-slate-700" },
-  failed: { label: "Couldn't answer", tone: "bg-rose-100 text-rose-800" },
-  clarify: { label: "Needs your choice", tone: "bg-indigo-100 text-indigo-800" },
-  no_source: { label: "No data source", tone: "bg-slate-200 text-slate-700" },
-  not_ready: { label: "Still analysing", tone: "bg-slate-200 text-slate-700" },
+  refused: { label: "Refused for safety", tone: "bg-amber-50 text-amber-800 ring-amber-200" },
+  cannot_answer: { label: "Not in this data", tone: "bg-slate-50 text-slate-600 ring-slate-200" },
+  failed: { label: "Couldn't answer", tone: "bg-rose-50 text-rose-700 ring-rose-200" },
+  clarify: { label: "Needs your choice", tone: "bg-indigo-50 text-indigo-700 ring-indigo-200" },
+  no_source: { label: "No data source", tone: "bg-slate-50 text-slate-600 ring-slate-200" },
+  not_ready: { label: "Still analysing", tone: "bg-sky-50 text-sky-700 ring-sky-200" },
 };
 
 /** Follow-ups that edit the previous query (module 9), offered where they make sense. */
@@ -53,6 +53,8 @@ const ICON = {
   check: "M20 6 9 17l-5-5",
   chevron: "m6 9 6 6 6-6",
   mic: "M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Zm7 9a7 7 0 0 1-14 0m7 7v4",
+  arrow: "M5 12h14M13 6l6 6-6 6",
+  layers: "M12 3 3 8l9 5 9-5-9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5",
   db: "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
 };
 
@@ -63,10 +65,10 @@ function UserBubble({ turn }: { turn: TurnData }) {
   const shown = turn.reply?.question ?? turn.correction?.corrected ?? turn.asked;
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-slate-900 px-4 py-2.5 text-white shadow-sm">
+      <div className="max-w-[85%] rounded-3xl rounded-br-lg bg-gradient-to-br from-indigo-600 to-violet-600 px-5 py-3 text-white shadow-[0_6px_20px_rgba(79,70,229,0.25)]">
         <p className="text-[15px] leading-relaxed">{shown}</p>
         {(turn.viaVoice || fixes.length > 0) && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-white/15 pt-1.5 text-xs text-slate-300">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-indigo-100/80">
             {turn.viaVoice && (
               <span className="inline-flex items-center gap-1" title="Transcribed by Whisper on this computer">
                 <Icon d={ICON.mic} className="h-3 w-3" /> heard “{turn.asked}”
@@ -75,15 +77,40 @@ function UserBubble({ turn }: { turn: TurnData }) {
             {fixes.map((c, i) => (
               <span key={i} className="inline-flex items-center gap-1"
                 title={`Matched a real value in ${c.locations.map((l) => `${l.source} · ${l.table}.${l.column}`).join(", ")}`}>
-                <span className="text-rose-300 line-through">{c.original}</span>
+                <span className="text-rose-200 line-through">{c.original}</span>
                 <span>→</span>
-                <span className="rounded bg-emerald-400/20 px-1 font-medium text-emerald-200">{c.corrected}</span>
+                <span className="rounded-md bg-white/20 px-1.5 font-medium text-white">{c.corrected}</span>
               </span>
             ))}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+// What the app is doing right now, as a short checklist (instead of a spinner).
+function Progress({ phase }: { phase: Phase }) {
+  const steps: { k: Phase; label: string }[] = [
+    { k: "correcting", label: "Matching names to your data" },
+    { k: "thinking", label: "Writing and checking the SQL" },
+  ];
+  const at = steps.findIndex((x) => x.k === phase);
+  return (
+    <ol className="space-y-2" aria-live="polite">
+      {steps.map((x, i) => {
+        const done = at > i;
+        const now = at === i || (at === -1 && i === steps.length - 1);
+        return (
+          <li key={x.k} className={`flex items-center gap-2.5 text-sm ${now ? "text-slate-800" : done ? "text-slate-400" : "text-slate-300"}`}>
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full ${done ? "bg-emerald-100 text-emerald-600" : now ? "bg-indigo-100" : "bg-slate-100"}`}>
+              {done ? <Icon d={ICON.check} className="h-3 w-3" /> : now ? <span className="orb-spin h-3 w-3 rounded-full border-2 border-indigo-200 border-t-indigo-600" /> : null}
+            </span>
+            {x.label}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -96,9 +123,10 @@ function Details({ turn }: { turn: TurnData }) {
   const timings = Object.entries(turn.timings);
   if (!timings.length && !retrieval) return null;
   return (
-    <div className="mt-3 border-t border-slate-100 pt-2">
-      <button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800" aria-expanded={open}>
-        <Icon d={ICON.chevron} className={`h-3 w-3 transition ${open ? "" : "-rotate-90"}`} /> Details: timing, tables used, query attempts
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      <button onClick={() => setOpen(!open)} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800" aria-expanded={open}>
+        <Icon d={ICON.layers} className="h-3.5 w-3.5" /> How I got this
+        <Icon d={ICON.chevron} className={`h-3 w-3 transition ${open ? "" : "-rotate-90"}`} />
       </button>
       {open && (
         <div className="mt-2 space-y-3 text-xs text-slate-600">
@@ -169,83 +197,106 @@ export default function TurnView({ turn, isLatest, phase, userSpeaking, pending,
   const status = r ? STATUS[r.status] : undefined;
   const firstAudio = turn.timings["end of question → first audio"];
 
+  const optionCls = "group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left text-sm font-medium text-slate-800 transition hover:border-indigo-300 hover:bg-indigo-50/60";
+  const num = (i: number) => (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-700">{i + 1}</span>
+  );
+
   return (
-    <div className="fade-up space-y-3">
+    <div className="fade-up space-y-4">
       <UserBubble turn={turn} />
 
       <div className="flex gap-3">
-        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-sm" aria-hidden>
-          <Icon d={ICON.db} className="h-4 w-4" />
+        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-md shadow-indigo-500/20" aria-hidden>
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" /></svg>
         </div>
-        <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="min-w-0 flex-1 rounded-3xl rounded-tl-lg border border-slate-200/80 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)]">
           {turn.loading ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500" aria-live="polite">
-              <span className="flex gap-1">
-                {[0, 0.15, 0.3].map((d) => (
-                  <span key={d} className="orb-bar h-2 w-2 rounded-full bg-indigo-400" style={{ animationDelay: `${d}s` }} />
-                ))}
-              </span>
-              {phaseLabel(phase === "idle" || phase === "listening" ? "thinking" : phase, userSpeaking)}
-            </div>
+            <Progress phase={phase === "idle" || phase === "listening" ? "thinking" : phase} />
           ) : turn.error ? (
             <p className="text-sm text-rose-700">{turn.error}</p>
           ) : r ? (
             <>
-              <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs">
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
                 {r.switched_off_source ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 font-medium text-slate-500 ring-1 ring-slate-200">
                     <Icon d={ICON.db} className="h-3 w-3" /> {r.switched_off_source.name} (switched off)
                   </span>
                 ) : r.source_name && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 font-medium text-slate-600 ring-1 ring-slate-200">
                     <Icon d={ICON.db} className="h-3 w-3" /> {r.source_name}
-                    {r.switched_source && " (switched)"}
+                    {r.switched_source && <span className="text-slate-400">· switched</span>}
                   </span>
                 )}
-                {status && <span className={`rounded-full px-2 py-0.5 font-medium ${status.tone}`}>{status.label}</span>}
+                {status && <span className={`rounded-full px-2.5 py-1 font-medium ring-1 ${status.tone}`}>{status.label}</span>}
+                <span className="ml-auto flex items-center gap-0.5">
+                  {firstAudio !== undefined && (
+                    <span className="mr-1.5 tabular-nums text-slate-400" title="From the moment you stopped speaking to the first sound of the answer">
+                      {(firstAudio / 1000).toFixed(1)} s
+                    </span>
+                  )}
+                  <button onClick={() => onReplay(r.answer)} title="Play answer" aria-label="Play answer"
+                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
+                    <Icon d={ICON.speaker} className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => navigator.clipboard?.writeText(r.answer).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); })}
+                    title={copied ? "Copied" : "Copy answer"} aria-label="Copy answer"
+                    className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
+                    <Icon d={copied ? ICON.check : ICON.copy} className="h-4 w-4" />
+                  </button>
+                </span>
               </div>
 
-              <p className="text-[17px] leading-relaxed text-slate-900" aria-live={isLatest ? "polite" : undefined}>{r.answer}</p>
+              <p className="text-[18px] leading-relaxed text-slate-900" aria-live={isLatest ? "polite" : undefined}>{r.answer}</p>
 
               {r.status === "clarify" && isLatest && pending && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {pending.kind === "source"
-                    ? pending.options.map((o, i) => (
-                        <button key={o.source_id} onClick={() => onPickSource(pending.question, o.source_id)}
-                          className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-900 hover:bg-indigo-100">
-                          {i + 1}. {o.name}
-                        </button>
-                      )).concat(pending.options.length > 1 ? [
-                        <button key="*all*" onClick={() => onPickSource(pending.question, "*all*")}
-                          className="rounded-full border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-900 hover:bg-indigo-50">
-                          All of them
-                        </button>,
-                      ] : [])
-                    : pending.options.map((o, i) => (
-                        <button key={o} onClick={() => onReply(o)}
-                          className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-900 hover:bg-indigo-100">
-                          {i + 1}. {o}
-                        </button>
-                      ))}
-                  <span className="text-xs text-slate-500">or just say your answer</span>
+                <div className="mt-4">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {pending.kind === "source"
+                      ? pending.options.map((o, i) => (
+                          <button key={o.source_id} onClick={() => onPickSource(pending.question, o.source_id)} className={optionCls}>
+                            {num(i)}
+                            <span className="flex-1">{o.name}</span>
+                            <Icon d={ICON.db} className="h-3.5 w-3.5 text-slate-300" />
+                          </button>
+                        )).concat(pending.options.length > 1 ? [
+                          <button key="*all*" onClick={() => onPickSource(pending.question, "*all*")}
+                            className="group flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3.5 py-2.5 text-left text-sm font-medium text-indigo-800 transition hover:border-indigo-300 hover:bg-indigo-100">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
+                              <Icon d={ICON.layers} className="h-3.5 w-3.5" />
+                            </span>
+                            <span className="flex-1">All of them</span>
+                            <span className="text-xs font-normal text-indigo-500">combined</span>
+                          </button>,
+                        ] : [])
+                      : pending.options.map((o, i) => (
+                          <button key={o} onClick={() => onReply(o)} className={optionCls}>
+                            {num(i)}
+                            <span className="flex-1">{o}</span>
+                          </button>
+                        ))}
+                  </div>
+                  <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-500">
+                    <Icon d={ICON.mic} className="h-3 w-3" /> or just say your answer
+                  </p>
                 </div>
               )}
 
               {r.switched_off_source && isLatest && (
-                <div className="mt-3">
+                <div className="mt-4">
                   <button onClick={() => onEnableSource(r.switched_off_source!.source_id, r.question)}
-                    className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-900 hover:bg-indigo-100">
-                    Turn on {r.switched_off_source.name} and ask
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500">
+                    Turn on {r.switched_off_source.name} and ask <Icon d={ICON.arrow} />
                   </button>
                 </div>
               )}
 
               {r.other_sources && r.other_sources.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className="text-xs text-slate-500">Meant other data?</span>
                   {r.other_sources.map((o) => (
                     <button key={o.source_id} onClick={() => onPickSource(r.question, o.source_id)}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 hover:border-indigo-300 hover:bg-indigo-50">
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50">
                       Answer from {o.name}
                     </button>
                   ))}
@@ -253,44 +304,29 @@ export default function TurnView({ turn, isLatest, phase, userSpeaking, pending,
               )}
 
               {(r.assumption || (r.attempts.length > 0 && r.status === "answered")) && (
-                <div className="mt-2 space-y-0.5 text-xs text-slate-500">
-                  {r.assumption && <p>Assumed: {r.assumption}</p>}
+                <div className="mt-3 space-y-1 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  {r.assumption && <p><span className="font-medium text-slate-600">Assumed:</span> {r.assumption}</p>}
                   {r.attempts.length > 0 && r.status === "answered" && (
                     <p>The first query didn't work and was fixed automatically ({r.attempts.length} {r.attempts.length === 1 ? "repair" : "repairs"}).</p>
                   )}
                 </div>
               )}
 
-              <div className="mt-3 flex flex-wrap items-center gap-1 text-xs">
-                <button onClick={() => onReplay(r.answer)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-600 hover:bg-slate-100">
-                  <Icon d={ICON.speaker} /> Play answer
-                </button>
-                <button onClick={() => navigator.clipboard?.writeText(r.answer).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200); })}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-600 hover:bg-slate-100">
-                  <Icon d={copied ? ICON.check : ICON.copy} /> {copied ? "Copied" : "Copy"}
-                </button>
-                {firstAudio !== undefined && (
-                  <span className="ml-auto text-slate-400" title="From the moment you stopped speaking to the first sound of the answer">
-                    answered in {(firstAudio / 1000).toFixed(1)} s
-                  </span>
-                )}
-              </div>
-
               {(r.result || r.sql) && (
-                <div className="mt-3">
-                  <Suspense fallback={<p className="text-xs text-slate-400">Loading chart…</p>}>
+                <div className="mt-4">
+                  <Suspense fallback={<div className="h-40 animate-pulse rounded-2xl bg-slate-50" />}>
                     <ResultView result={turn.sqlResult ?? null} sql={r.sql ?? ""} onRun={(sql) => onRunSql(turn.id, sql)} running={sqlRunning} />
                   </Suspense>
                 </div>
               )}
 
               {isLatest && followUps(r).length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-slate-500">Follow up:</span>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Ask next</span>
                   {followUps(r).map((f) => (
                     <button key={f} onClick={() => onReply(f)}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50">
-                      {f}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-800">
+                      <span className="text-indigo-400" aria-hidden>↳</span> {f}
                     </button>
                   ))}
                 </div>

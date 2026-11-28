@@ -58,12 +58,12 @@ export default function ResultView({ result, sql, onRun, running }: {
   const switchable = ok ? [ok.chart.type, ...ok.chart.alternatives].filter((t): t is Plottable => PLOTTABLE.includes(t)) : [];
 
   return (
-    <div className="rounded-lg border border-slate-200">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
-        <div className="flex gap-1" role="tablist">
+    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3 py-2">
+        <div className="inline-flex gap-0.5 rounded-xl bg-slate-200/60 p-0.5" role="tablist">
           {tabs.filter((t) => t.show).map((t) => (
             <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-              className={`rounded-md px-3 py-1 text-sm ${tab === t.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+              className={`rounded-lg px-3 py-1 text-sm font-medium transition ${tab === t.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
               {t.label}
             </button>
           ))}
@@ -74,15 +74,16 @@ export default function ResultView({ result, sql, onRun, running }: {
               {ok.row_count.toLocaleString()} row{ok.row_count === 1 ? "" : "s"} · {ok.ms} ms
             </span>
             {ok.row_count > 0 && (
-              <button onClick={() => download("result.csv", toCsv(ok.columns, ok.rows))} className="text-sky-700 hover:underline">
-                Download CSV
+              <button onClick={() => download("result.csv", toCsv(ok.columns, ok.rows))}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 transition hover:border-indigo-300 hover:text-indigo-700">
+                ↓ CSV
               </button>
             )}
           </div>
         )}
       </div>
 
-      <div className="p-4">
+      <div className="p-5">
         {ok?.truncated && tab !== "sql" && (
           <p className="mb-3 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
             Only the first {ok.row_count.toLocaleString()} rows are shown. Add filters or grouping to see everything.
@@ -93,14 +94,14 @@ export default function ResultView({ result, sql, onRun, running }: {
           <div>
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div>
-                {title(ok.chart) && <p className="text-sm font-medium text-slate-900">{title(ok.chart)}</p>}
-                <p className="text-xs text-slate-500">{ok.chart.reason}</p>
+                {title(ok.chart) && <p className="text-[15px] font-semibold text-slate-900">{title(ok.chart)}</p>}
+                <p className="text-xs text-slate-400">{ok.chart.reason}</p>
               </div>
               {switchable.length > 1 && (
-                <div className="flex gap-1" aria-label="Chart type">
+                <div className="inline-flex gap-0.5 rounded-lg bg-slate-100 p-0.5" aria-label="Chart type">
                   {switchable.map((t) => (
                     <button key={t} onClick={() => setChartType(t)}
-                      className={`rounded border px-2 py-0.5 text-xs ${chartType === t ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`}>
+                      className={`rounded-md px-2 py-0.5 text-xs font-medium transition ${chartType === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
                       {TYPE_LABEL[t]}
                     </button>
                   ))}
@@ -125,17 +126,17 @@ export default function ResultView({ result, sql, onRun, running }: {
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && draft.trim()) onRun(draft);
               }}
-              className="w-full rounded-md bg-slate-900 p-3 font-mono text-xs leading-relaxed text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500" />
+              className="w-full rounded-xl bg-[#0c0f1d] p-4 font-mono text-xs leading-relaxed text-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
             <div className="flex flex-wrap items-center gap-2">
               <button disabled={running || !draft.trim()} onClick={() => onRun(draft)}
-                className="rounded-md bg-slate-900 px-3 py-1 text-xs text-white disabled:opacity-40">
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-40">
                 {running ? "Running…" : "Run SQL"}
               </button>
               <button onClick={() => navigator.clipboard?.writeText(draft).then(() => {
                   setCopied(true);
                   setTimeout(() => setCopied(false), 1200);
                 })}
-                className="rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-700">
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
                 {copied ? "Copied" : "Copy"}
               </button>
               <span className="text-xs text-slate-400">⌘/Ctrl + Enter to run · read-only, checked by the safety guard</span>

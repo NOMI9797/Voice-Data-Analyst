@@ -9,20 +9,20 @@ const ENGINE_LABEL: Record<Source["engine"], string> = {
 };
 
 const ENGINE_COLOR: Record<Source["engine"], string> = {
-  postgresql: "bg-sky-100 text-sky-800",
-  mysql: "bg-orange-100 text-orange-800",
-  sqlite: "bg-violet-100 text-violet-800",
-  duckdb: "bg-amber-100 text-amber-800",
+  postgresql: "bg-sky-400",
+  mysql: "bg-orange-400",
+  sqlite: "bg-violet-400",
+  duckdb: "bg-amber-400",
 };
 
 // Shows a source's profiling status (profiled, describing...).
 function ProfileBadge({ status }: { status?: string }) {
-  if (!status || status === "ready") return <span className="text-emerald-700">· profiled</span>;
-  if (status.startsWith("error")) return <span className="text-rose-700" title={status}>· profile failed</span>;
-  return <span className="animate-pulse text-sky-700">· {status}…</span>;
+  if (!status || status === "ready") return null;
+  if (status.startsWith("error")) return <span className="text-rose-400" title={status}>profile failed</span>;
+  return <span className="ml-1 animate-pulse text-sky-300">{status}…</span>;
 }
 
-// One database in the sidebar: engine, tables, on/off switch.
+// One database in the rail: engine, tables, on/off switch.
 function SourceCard({
   source,
   onToggle,
@@ -37,47 +37,47 @@ function SourceCard({
   const [open, setOpen] = useState(false);
   const tables = source.tables ?? [];
   return (
-    <li className={`rounded-lg border bg-white p-3 ${source.active ? "border-slate-200" : "border-dashed border-slate-300 opacity-60"}`}>
-      <div className="flex items-start gap-2">
-        <span
-          title={source.error ?? "Connected"}
-          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${source.status === "ok" ? "bg-emerald-500" : "bg-rose-500"}`}
-        />
+    <li className={`rounded-xl border p-3 transition ${source.active ? "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]" : "border-dashed border-white/10 bg-transparent opacity-55"}`}>
+      <div className="flex items-start gap-3">
+        <div className="relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-slate-300" aria-hidden>
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+          </svg>
+          <span title={source.error ?? "Connected"}
+            className={`absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0c0f1d] ${source.status === "ok" ? "bg-emerald-400" : "bg-rose-400"}`} />
+        </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate font-medium">{source.name}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-            <span className={`rounded px-1.5 py-0.5 font-medium ${ENGINE_COLOR[source.engine]}`}>
+          <div className="truncate text-sm font-medium text-white">{source.name}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-400">
+            <span className="mr-1 inline-flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${ENGINE_COLOR[source.engine]}`} />
               {ENGINE_LABEL[source.engine]}
             </span>
-            <button onClick={() => setOpen(!open)} className="text-slate-500 hover:text-slate-800">
+            <button onClick={() => setOpen(!open)} className="hover:text-white" aria-expanded={open}>
               {tables.length} tables {open ? "▴" : "▾"}
             </button>
             <ProfileBadge status={source.profile_status} />
           </div>
-          {source.error && <p className="mt-1 text-xs text-rose-700">{source.error}</p>}
+          {source.error && <p className="mt-1 text-xs text-rose-300">{source.error}</p>}
         </div>
-        <label className="flex cursor-pointer items-center" title={source.active ? "Used for questions" : "Ignored"}>
+        <label className="mt-1 flex cursor-pointer items-center" title={source.active ? "Used for questions" : "Ignored"}>
           <input type="checkbox" className="peer sr-only" checked={source.active} onChange={onToggle} />
-          <span className="h-5 w-9 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500 after:ml-0.5 after:mt-0.5 after:block after:h-4 after:w-4 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-4" />
+          <span className="h-5 w-9 rounded-full bg-white/15 transition peer-checked:bg-indigo-500 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300 after:ml-0.5 after:mt-0.5 after:block after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-4" />
         </label>
       </div>
       {open && (
-        <div className="mt-2 border-t border-slate-100 pt-2">
+        <div className="mt-3 border-t border-white/5 pt-2">
           <p className="truncate font-mono text-[11px] text-slate-500" title={source.display_url}>
             {source.display_url}
           </p>
-          <ul className="mt-1 max-h-40 overflow-y-auto font-mono text-xs text-slate-700">
+          <ul className="mt-1.5 grid max-h-40 grid-cols-2 gap-x-2 overflow-y-auto font-mono text-[11px] text-slate-300">
             {tables.map((t) => (
-              <li key={t} className="truncate">• {t}</li>
+              <li key={t} className="truncate" title={t}>{t}</li>
             ))}
           </ul>
-          <div className="mt-2 flex gap-3">
-            <button onClick={onReprofile} className="text-xs text-sky-700 hover:underline">
-              Re-profile
-            </button>
-            <button onClick={onRemove} className="text-xs text-rose-600 hover:underline">
-              Remove source
-            </button>
+          <div className="mt-2 flex gap-3 text-xs">
+            <button onClick={onReprofile} className="text-indigo-300 hover:text-indigo-200">Re-profile</button>
+            <button onClick={onRemove} className="text-rose-300 hover:text-rose-200">Remove</button>
           </div>
         </div>
       )}
@@ -165,14 +165,14 @@ export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
   const activeCount = sources.filter((s) => s.active).length;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Your data</h2>
-        <span className="text-xs text-slate-500">{activeCount} of {sources.length} in use</span>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between px-2 pt-1">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Data sources</h2>
+        <span className="text-[11px] text-slate-500">{activeCount} of {sources.length} on</span>
       </div>
 
       {loading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <p className="px-2 text-sm text-slate-500">Loading…</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {sources.map((s) => (
@@ -186,70 +186,70 @@ export default function SourcesPanel({ onChange }: { onChange?: () => void }) {
               }}
             />
           ))}
-          {sources.length === 0 && <li className="text-sm text-slate-500">No sources yet. Add one below.</li>}
+          {sources.length === 0 && <li className="px-2 text-sm text-slate-400">No sources yet. Add one below.</li>}
         </ul>
       )}
 
-      {error && <p className="rounded-md bg-rose-50 p-2 text-sm text-rose-700">{error}</p>}
+      {error && <p className="rounded-lg bg-rose-500/10 p-2 text-sm text-rose-300">{error}</p>}
 
-      <details className="group rounded-lg border border-slate-200 bg-slate-50/60 open:bg-white" open={sources.length === 0}>
-        <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-medium text-slate-700">
-          Add a data source
-          <span className="text-slate-400 transition group-open:rotate-45">+</span>
+      <details className="group rounded-xl border border-white/10 bg-white/[0.02] open:bg-white/[0.04]" open={sources.length === 0}>
+        <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white">
+          <span className="inline-flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/20 text-indigo-300" aria-hidden>+</span>
+            Add a data source
+          </span>
         </summary>
         <div className="flex flex-col gap-3 px-3 pb-3">
-      <form onSubmit={connect} className="flex flex-col gap-2">
-        <span className="text-sm font-medium">Connect a database</span>
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="postgresql://user:pass@host:5432/db"
-          className="rounded-md border border-slate-300 px-2 py-1.5 font-mono text-xs focus:border-sky-500 focus:outline-none"
-        />
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Name (optional)"
-          className="rounded-md border border-slate-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none"
-        />
-        <button
-          disabled={busy || !url.trim()}
-          className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
-        >
-          {busy ? "Working…" : "Connect"}
-        </button>
-        <p className="text-[11px] leading-snug text-slate-500">
-          PostgreSQL, MySQL, SQLite path. Connections are read-only.
-        </p>
-      </form>
+          <form onSubmit={connect} className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-slate-400">Connection string</span>
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="postgresql://user:pass@host:5432/db"
+              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none"
+            />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name (optional)"
+              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-sm text-white placeholder:text-slate-500 focus:border-indigo-400 focus:outline-none"
+            />
+            <button
+              disabled={busy || !url.trim()}
+              className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-400 disabled:opacity-40"
+            >
+              {busy ? "Working…" : "Connect"}
+            </button>
+            <p className="text-[11px] leading-snug text-slate-500">PostgreSQL, MySQL or SQLite. Connections are read-only.</p>
+          </form>
 
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          upload(e.dataTransfer.files);
-        }}
-        onClick={() => fileInput.current?.click()}
-        className={`cursor-pointer rounded-lg border-2 border-dashed p-4 text-center text-sm transition ${
-          dragOver ? "border-sky-500 bg-sky-50" : "border-slate-300 bg-white hover:border-slate-400"
-        }`}
-      >
-        <p className="font-medium">Upload files</p>
-        <p className="text-xs text-slate-500">CSV files (one table each) or a SQLite .db</p>
-        <input
-          ref={fileInput}
-          type="file"
-          multiple
-          accept=".csv,.tsv,.txt,.db,.sqlite,.sqlite3"
-          className="hidden"
-          onChange={(e) => upload(e.target.files)}
-        />
-      </div>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              upload(e.dataTransfer.files);
+            }}
+            onClick={() => fileInput.current?.click()}
+            className={`cursor-pointer rounded-lg border border-dashed p-4 text-center text-sm transition ${
+              dragOver ? "border-indigo-400 bg-indigo-500/10" : "border-white/15 hover:border-white/30"
+            }`}
+          >
+            <p className="font-medium text-slate-200">Drop a file or click to upload</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">CSV (one table each) or a SQLite .db</p>
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              accept=".csv,.tsv,.txt,.db,.sqlite,.sqlite3"
+              className="hidden"
+              onChange={(e) => upload(e.target.files)}
+            />
+          </div>
         </div>
       </details>
     </div>

@@ -76,9 +76,9 @@ function Kpis({ spec, columns, rows }: { spec: ChartSpec; columns: string[]; row
   return (
     <div className="flex flex-wrap gap-3">
       {spec.x && (
-        <div className="min-w-40 flex-1 rounded-lg border border-slate-200 px-4 py-3">
-          <p className="text-xs text-slate-500">{humanize(spec.x)}</p>
-          <p className="mt-1 truncate text-3xl font-semibold text-slate-900" title={formatValue(rows[0][columns.indexOf(spec.x)])}>
+        <div className="min-w-40 flex-1 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 via-white to-white px-5 py-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{humanize(spec.x)}</p>
+          <p className="mt-1 truncate text-3xl font-semibold tracking-tight text-slate-900" title={formatValue(rows[0][columns.indexOf(spec.x)])}>
             {formatValue(rows[0][columns.indexOf(spec.x)])}
           </p>
         </div>
@@ -86,9 +86,9 @@ function Kpis({ spec, columns, rows }: { spec: ChartSpec; columns: string[]; row
       {spec.y.map((y) => {
         const v = rows[0][columns.indexOf(y)];
         return (
-          <div key={y} className="min-w-40 flex-1 rounded-lg border border-slate-200 px-4 py-3">
-            <p className="text-xs text-slate-500">{humanize(y)}</p>
-            <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-900" title={formatValue(v)}>
+          <div key={y} className="min-w-40 flex-1 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 via-white to-white px-5 py-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{humanize(y)}</p>
+            <p className="mt-1 text-4xl font-semibold tracking-tight tabular-nums text-slate-900" title={formatValue(v)}>
               {formatHeadline(v)}
             </p>
           </div>
