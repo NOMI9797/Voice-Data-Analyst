@@ -47,6 +47,8 @@ OPTS = [{"source_id": "o", "name": "Olist e-commerce"}, {"source_id": "c", "name
     ("Northwind", "n"),
     ("the first one", "o"),
     ("second", "c"),
+    ("the second one", "c"),
+    ("the third one", "n"),
     ("number 3", "n"),
     ("the last one", "n"),
     ("how many orders were late last month and why", None),  # long: a new question

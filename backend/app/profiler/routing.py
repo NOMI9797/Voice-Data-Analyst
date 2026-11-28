@@ -97,12 +97,10 @@ def resolve_choice(reply: str, options: list[dict]) -> str | None:
         scores.append(sum(1 for w in words if w in distinctive or w.rstrip("s") in distinctive))
     if max(scores) > 0:
         return options[scores.index(max(scores))]["source_id"] if scores.count(max(scores)) == 1 else None
-    # by position
-    if "last" in words or "latter" in words:
-        return options[-1]["source_id"]
-    hits = {i for i, ws in _ORDINALS.items() if i < len(options) and any(w in ws for w in words)}
-    if len(hits) == 1:
-        return options[hits.pop()]["source_id"]
+    # by position ("the second one": "one" here is not "the first")
+    pos = _position(words, len(options))
+    if pos is not None:
+        return options[pos]["source_id"]
     return _sounds_like_option(words, options)
 
 
